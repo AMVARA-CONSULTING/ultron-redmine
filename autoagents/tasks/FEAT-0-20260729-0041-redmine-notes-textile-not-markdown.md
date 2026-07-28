@@ -1,0 +1,45 @@
+# Redmine journal notes must use Textile, not Markdown
+
+## Tracker
+- **Redmine:** (none — bug / formatting follow-up; see self-upgrade notes on #7406 and similar)
+- **GitHub:** (none)
+- **0**
+
+## Problem / goal
+
+Ultron posts some Redmine journal notes in **Markdown** (or Markdown-ish Discord markup). This Redmine instance expects **Textile** for journals, so notes look wrong in the UI (literal `**bold**`, fenced ` ``` ` blocks, Discord `_italics_`, etc.).
+
+**Concrete example:** the **self-upgrade / self-repair** report note written by `ultron/self_upgrade.py` (`_outcome_redmine_notes` → `RedmineClient.add_note`). Today it only strips `**` and still leaves Markdown/Discord constructs from `_format_outcome_report` (headings via bold labels, triple-backtick log tails, backticks around paths).
+
+The same class of bug likely affects **`/note`** / NL `note`: `NOTE_SYSTEM` in `ultron/workflows.py` still says *“Use markdown only if the user already used it”*, and `_note_body_with_author` prefixes `_Note written by … from Discord_` (Discord markdown underscore), which is not a proper Textile byline.
+
+## Evidence
+
+- `ultron/self_upgrade.py`: `_outcome_redmine_notes` — `text.replace("**", "")` only; body built with Markdown-oriented `**Label:**` and ` ``` ` fences in `_format_outcome_report`.
+- `ultron/workflows.py`: `NOTE_SYSTEM` + `_note_body_with_author`.
+- Operator observation: self-update notes in Redmine render as Markdown source, not Textile.
+
+## High-level instructions for coder
+
+- Add a small shared helper (e.g. `ultron/redmine_textile.py` or under `textutil`) that formats **Redmine journal bodies in Textile**:
+  - Bold/strong → Textile `*text*` (or `**` only if you confirm Textile flavor; prefer classic Redmine Textile `*strong*` / `_em_`).
+  - Inline code → `@code@` (not backticks).
+  - Multi-line logs / shot tails → `<pre>...</pre>` or Textile `bc. ` / indented pre blocks — pick one style and stick to it.
+  - Lists → Textile `* ` / `# ` as appropriate.
+  - Do **not** emit Markdown ` ``` `, `**`, `# ` ATX headings, or Discord spoiler/mention syntax in journal notes.
+- Rework **`_outcome_redmine_notes`** (and optionally the Discord `FeedbackReport` path separately): Discord feedback may stay Markdown; **Redmine path must be Textile-only**. Prefer building the Redmine note from structured fields rather than stripping Markdown from the Discord report.
+- Fix **`/note`** path:
+  - Change `NOTE_SYSTEM` to require **Textile** for Redmine (plain text + Textile markup only).
+  - Author line in Textile (e.g. `_Note written by Name from Discord_` is OK in Textile for emphasis, or use a plain `Note written by Name from Discord:` line without Discord-only conventions).
+- Grep for other `add_note` call sites; apply the same rule everywhere Ultron writes journals.
+- Tests: unit-test the Textile helper (bold, code, pre/log, no leftover ` ``` ` / `**`); optional snapshot of a self-upgrade note body.
+- English for any user-facing Discord strings; Redmine note language can stay English like today.
+- Patch-bump `pyproject.toml` + `ultron/__init__.py` when shipping the fix.
+
+## Acceptance criteria
+
+- [ ] Self-upgrade Redmine note contains no Markdown fences or `**`; uses Textile/`<pre>` for logs
+- [ ] `/note` LLM prompt + author prefix documented as Textile-oriented; tests cover helper
+- [ ] All `add_note` writers reviewed (list them in Implementation notes)
+- [ ] `.venv/bin/pytest -q` for new/changed tests PASS
+- [ ] Manual: trigger a dry note or inspect last `/upgrade` note format on Redmine (or unit-equivalent) — journals readable as Textile in the UI
