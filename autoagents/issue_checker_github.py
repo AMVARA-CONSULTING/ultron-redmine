@@ -18,7 +18,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 TASKS_DIR = Path(__file__).resolve().parent / "tasks"
-GH_REPO = os.environ.get("AGENT_GH_REPO", "Luipy56/ultron-redmine")
+GH_REPO = os.environ.get("AGENT_GH_REPO", "AMVARA-CONSULTING/ultron-redmine")
 
 
 def has_task_file(issue_num: int) -> bool:

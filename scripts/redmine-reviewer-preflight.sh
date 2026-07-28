@@ -10,7 +10,7 @@ fi
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 TASKDIR="$REPO_ROOT/autoagents/tasks"
-GH_REPO="${AGENT_GH_REPO:-Luipy56/ultron-redmine}"
+GH_REPO="${AGENT_GH_REPO:-AMVARA-CONSULTING/ultron-redmine}"
 LAST_REVIEW_FILE="$REPO_ROOT/autoagents/001-redmine-reviewer/time-of-last-review.txt"
 LOG_FILE="${ULTRON_LOG_FILE:-$REPO_ROOT/ultron.log}"
 

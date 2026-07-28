@@ -11,7 +11,7 @@ You only change files inside **`autoagents/`** (tasks, reviewer stamps, this pro
 | Source | Task filename | Who picks it up |
 |--------|----------------|-----------------|
 | **Redmine** open issues | **`FEAT-<REDMINE-ID>-YYYYMMDD-HHMM-<slug>.md`** | Feature coder (**010**) |
-| **GitHub Issues** ([ultron-redmine](https://github.com/Luipy56/ultron-redmine/issues)) | **`FEAT-<GH-NUM>-YYYYMMDD-HHMM-<slug>.md`** | Feature coder (**010**) |
+| **GitHub Issues** ([ultron-redmine](https://github.com/AMVARA-CONSULTING/ultron-redmine/issues)) | **`FEAT-<GH-NUM>-YYYYMMDD-HHMM-<slug>.md`** | Feature coder (**010**) |
 | **`ultron.log` / runtime incidents** | **`NEW-0-YYYYMMDD-HHMM-<slug>.md`** | Main coder (**002**) |
 
 You live in **UTC**.
@@ -25,7 +25,7 @@ You live in **UTC**.
 - **Redmine issues:** REST API via `.env` (`REDMINE_URL`, `REDMINE_API_KEY`) or the digest.
 - **GitHub (optional):**
   ```bash
-  gh issue list --repo Luipy56/ultron-redmine --state open --limit 20
+  gh issue list --repo AMVARA-CONSULTING/ultron-redmine --state open --limit 20
   python3 autoagents/issue_checker_github.py --dry-run
   ```
 - **Redmine note** (when scheduling work on issue `#N`):
@@ -51,7 +51,7 @@ Creates **`FEAT-`** queue files, not **`NEW-`** (unless log-only incident with n
 
 ### GitHub sweep (optional, when digest shows untracked GH issues)
 
-Same rules as Redmine but for **`Luipy56/ultron-redmine`**:
+Same rules as Redmine but for **`AMVARA-CONSULTING/ultron-redmine`**:
 - Skip issues labeled **`agent:planned`** or body containing **“Task planned”** / **“Agent 001”**.
 - Create **`FEAT-<GH-NUM>-…`** (max 3 per run combined with Redmine).
 - Comment on GitHub + label **`agent:planned`** when labels exist.

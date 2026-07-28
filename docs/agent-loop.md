@@ -77,7 +77,7 @@ Environment highlights:
 |----------|---------|---------|
 | `AGENT_LOOP_SLEEP_MINUTES` | 5 | Loop interval |
 | `AGENT_GIT_SYNC` | 1 | Run `git-sync-main.sh` before editing steps |
-| `AGENT_GH_REPO` | `Luipy56/ultron-redmine` | GitHub repo for optional GH intake |
+| `AGENT_GH_REPO` | `AMVARA-CONSULTING/ultron-redmine` | GitHub repo for optional GH intake |
 | `ULTRON_LOG_FILE` | `./ultron.log` | Log path for 001 heuristics |
 | `AGENT_INTAKE_REVIEWER_ALWAYS` | 0 | Force 001 cursor-agent every cycle |
 | `AGENT_ULTRON_DUMP` | 1 | After committer, run `ultron-dump.sh` when runtime paths changed |

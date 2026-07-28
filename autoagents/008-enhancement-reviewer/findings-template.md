@@ -2,7 +2,7 @@
 
 ## Tracker
 - **Redmine:** (none — enhancement reviewer) or #<ID> — <URL>
-- **GitHub:** (none) or https://github.com/Luipy56/ultron-redmine/issues/<N>
+- **GitHub:** (none) or https://github.com/AMVARA-CONSULTING/ultron-redmine/issues/<N>
 - **0** (when no issue)
 
 ## Problem / goal

@@ -18,7 +18,7 @@ _tdir="${TMPDIR:-/tmp}"
 _tdir="${_tdir%/}"
 AGENT_LOOP_TMP="${AGENT_LOOP_TMP:-${_tdir}/ultron-agent-loop}"
 unset _tdir
-GH_REPO="${AGENT_GH_REPO:-Luipy56/ultron-redmine}"
+GH_REPO="${AGENT_GH_REPO:-AMVARA-CONSULTING/ultron-redmine}"
 LAST_REVIEW_FILE="${SCRIPTDIR}/001-redmine-reviewer/time-of-last-review.txt"
 ENH_REVIEW_FILE="${SCRIPTDIR}/008-enhancement-reviewer/time-of-last-review.txt"
 INTAKE_PREFLIGHT="${REPO_ROOT}/scripts/redmine-reviewer-preflight.sh"
@@ -463,7 +463,7 @@ Usage: $(basename "$0") [COMMAND]
     dump, ultron-dump Reinstall + systemctl restart when Ultron runtime paths changed
     shot, upgrade-shot  FEAT→handoff→tester→closing (used by Discord /upgrade)
 
-Environment: AGENT_LOOP_SLEEP_MINUTES, AGENT_GIT_SYNC, AGENT_GH_REPO (default Luipy56/ultron-redmine),
+Environment: AGENT_LOOP_SLEEP_MINUTES, AGENT_GIT_SYNC, AGENT_GH_REPO (default AMVARA-CONSULTING/ultron-redmine),
   AGENT_ULTRON_DUMP (default 1; set 0 to skip dump/restart), AGENT_INTAKE_REVIEWER_ALWAYS,
   AGENT_ENHANCEMENT_REVIEWER_ALWAYS, AGENT_CURSOR_TIMEOUT_MINUTES, …
 

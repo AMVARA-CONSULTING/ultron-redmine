@@ -2,7 +2,7 @@
 
 ## Tracker
 - **Redmine:** #ISSUE_ID — https://redmine.example/issues/ISSUE_ID
-- **GitHub:** (optional) https://github.com/Luipy56/ultron-redmine/issues/N
+- **GitHub:** (optional) https://github.com/AMVARA-CONSULTING/ultron-redmine/issues/N
 
 ## Meta
 - **Status:** `ready-for-dev`

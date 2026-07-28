@@ -60,7 +60,7 @@ A **Discord** bot that connects **Redmine** to an **OpenAI-compatible** LLM (Ope
 ## Quick start
 
 ```bash
-git clone https://github.com/Luipy56/ultron-redmine.git
+git clone https://github.com/AMVARA-CONSULTING/ultron-redmine.git
 cd ultron-redmine
 python3 -m venv .venv && source .venv/bin/activate
 pip install -e .
