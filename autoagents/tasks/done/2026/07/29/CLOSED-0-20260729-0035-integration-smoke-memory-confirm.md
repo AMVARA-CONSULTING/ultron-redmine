@@ -1,3 +1,12 @@
+---
+## Closing summary (TOP)
+
+- **What happened:** Operators needed a repeatable smoke checklist (and offline automation) for Ultron 3.0 memory, NL fast-path, and write confirms beyond unit coverage.
+- **What was done:** Extended `scripts/smoke_check.py` with offline Ultron 3.0 checks; added Manual Discord smoke docs (`OPERATIONS.md` + pointers); pytest coverage for smoke helpers.
+- **What was tested:** Focused pytest 44 passed; smoke_check OK (version/memory/fastpath/write_confirm + Redmine/LLM); live Discord 6-step SKIP (no guild session) — overall PASS.
+- **Why closed:** Acceptance criteria met; interactive Discord UI left as explicit operator follow-up SKIP.
+- **Closed at (UTC):** 2026-07-28 23:22
+---
 # Integration smoke: memory + fast-path + write confirm (Discord)
 
 ## Tracker
@@ -36,7 +45,7 @@ Unit tests cover pieces of Ultron **3.0.0**, but operators need a **repeatable s
 
 - [x] Offline smoke (pytest + optional smoke_check) documented and green
 - [x] Manual checklist written in docs
-- [ ] Test report filled after at least one live Discord pass (or explicit SKIP with reason)
+- [x] Test report filled after at least one live Discord pass (or explicit SKIP with reason)
 
 ## Implementation notes
 
@@ -87,3 +96,30 @@ Follow **Manual Discord smoke (Ultron 3.0)** in `docs/OPERATIONS.md` (same six s
 | Live Discord 6-step smoke | **SKIP** | Coder agent has no Discord guild session; tester must run OPERATIONS checklist on amvara4 after dump/restart |
 
 ### Overall: **PARTIAL** (offline green; Discord live deferred to tester)
+
+## Test report (tester)
+
+- **Date/time (UTC):** 2026-07-28 23:21–23:22 UTC
+- **Environment:** branch `main` (synced), host **amvara4**, `.venv`, package **3.0.8**; `ultron.service` active (PID from restart 01:14:54 CEST)
+
+### What was tested
+
+1. Focused pytest per Testing instructions
+2. `scripts/smoke_check.py` (offline Ultron 3.0 + Redmine + LLM)
+3. Docs checklist presence (`OPERATIONS.md` Manual Discord smoke)
+4. Live host corroboration via `ultron.log` / systemd (no interactive Discord client)
+5. Manual Discord 6-step guild checklist
+
+### Results
+
+| Criterion | Result | Evidence |
+|-----------|--------|----------|
+| Offline smoke pytest PASS | **PASS** | `44 passed` in 1.56s (`test_smoke_check` + `test_user_memory` + `test_nl_fastpath` + `test_write_confirm`) |
+| `smoke_check.py` Ultron 3.0 offline OK | **PASS** | OK version 3.0.8; OK user_memory; OK nl_fastpath; OK write_confirm; OK Redmine 200; OK LLM gemma4:latest |
+| Manual checklist in docs | **PASS** | `docs/OPERATIONS.md` § Manual Discord smoke; pointers in USER_GUIDE + RELEASE_CHECKLIST |
+| Live bot Discord gateway (host) | **PASS** | `ultron.log`: Logged in as Ultron#7482 \| Ultron **v3.0.8**; user_memory store ready; slash synced to guild |
+| Live Discord 6-step smoke (`/status`…`/forget`) | **SKIP** | Tester agent has no Discord guild interactive session; cannot exercise slash/NL UI. Operators: run OPERATIONS checklist once on amvara4. |
+
+### Overall: **PASS**
+
+Operator feedback: Offline automation and docs deliverables are green on amvara4 with live bot **v3.0.8**. Interactive Discord six-step smoke remains an operator follow-up (explicit SKIP). Safe to close this task; re-run OPERATIONS checklist after the next dump/restart if you want guild UI confirmation on record.
