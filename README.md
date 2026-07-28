@@ -32,7 +32,7 @@ In Discord, **`/help`** is the live list. Short map:
 | Who | Commands |
 |-----|----------|
 | Everyone | `/help`, `/token` (DM) |
-| Allowlisted | `/ping`, `/status`, listings (`/list_*`, `/find_issue`, `/top_tickets`, `/new_ticket`), time (`/time_summary`, `/log_time`), LLM (`/summary`, `/ask_issue`, `/note`, `/ol`), audits (`/audit`, `/ca`), `@Ultron` NL routing |
+| Allowlisted | `/ping`, `/status`, listings (`/list_*`, `/find_issue`, `/top_tickets`, `/new_ticket`), time (`/time_summary`, `/log_time`), memory (`/remember`, `/forget`, `/memory`), LLM (`/summary`, `/ask_issue`, `/note`, `/ol`), audits (`/audit`, `/ca`), `@Ultron` NL routing |
 | Admins | `/approve`, `/remove`, `/show_config`, `/pi`, `/upgrade` |
 
 Access: user DMs **`/token`** → admin **`/approve`** (or host `ultron add token '…'`). Admins = `DISCORD_ADMIN_IDS` and/or `admins.json`.

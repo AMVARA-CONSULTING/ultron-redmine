@@ -39,13 +39,25 @@ def chunk_discord(text: str, limit: int = 1900) -> list[str]:
     return chunks
 
 
-def format_issue_for_summary(issue: dict) -> str:
+def format_issue_for_summary(
+    issue: dict,
+    *,
+    max_description_chars: int = 4000,
+    max_journal_notes: int = 12,
+    max_note_chars: int = 800,
+    max_total_chars: int = 8000,
+) -> str:
+    """Render a Redmine issue for LLM prompts (compact defaults for small models).
+
+    Why: Gemma-class context windows fill quickly; aggressive truncation keeps
+    summary/ask prompts useful without drowning the model in old journals.
+    """
     lines: list[str] = []
     lines.append(f"#{(issue.get('id'))}: {issue.get('subject', '')}")
     if issue.get("description"):
         lines.append("")
         lines.append("## Description")
-        lines.append(str(issue["description"])[:12000])
+        lines.append(str(issue["description"])[:max_description_chars])
     status = issue.get("status") or {}
     tracker = issue.get("tracker") or {}
     project = issue.get("project") or {}
@@ -62,13 +74,15 @@ def format_issue_for_summary(issue: dict) -> str:
     journals = issue.get("journals") or []
     if journals:
         lines.append("")
-        lines.append("## Journal")
-        for j in journals[-30:]:
+        lines.append("## Journal (recent)")
+        noted = [j for j in journals if str(j.get("notes") or "").strip()]
+        for j in noted[-max_journal_notes:]:
             user = (j.get("user") or {}).get("name", "")
             created = j.get("created_on", "")
             notes = (j.get("notes") or "").strip()
-            if not notes:
-                continue
-            lines.append(f"- [{created}] {user}: {notes[:2000]}")
+            lines.append(f"- [{created}] {user}: {notes[:max_note_chars]}")
 
-    return "\n".join(lines)
+    text = "\n".join(lines)
+    if len(text) > max_total_chars:
+        return text[: max_total_chars - 40] + "\n…(ticket truncated for LLM)"
+    return text

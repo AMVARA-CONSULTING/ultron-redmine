@@ -112,6 +112,7 @@ async def run_ol_advisor(
     cmd_need_prov: bool = False,
     cmd_need_model: bool = False,
     session_context: str | None = None,
+    memory_block: str | None = None,
     on_chain_skip: ChainSkipCallback | None = None,
     on_progress: ProgressCallback | None = None,
 ) -> tuple[str, str]:
@@ -129,6 +130,9 @@ async def run_ol_advisor(
     )
 
     system = load_ol_system_prompt()
+    mem = (memory_block or "").strip()
+    if mem:
+        system = f"{system}\n\n{mem}\n"
     user_parts = [task]
     if session_context and session_context.strip():
         user_parts.extend(["", "### Session context", "", session_context.strip()])

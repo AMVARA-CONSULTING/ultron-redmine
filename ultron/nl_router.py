@@ -96,9 +96,18 @@ Rules:
 - If they want the top N tickets in a specific project (by priority, newest, or oldest), use top_tickets with project (and optional kind_filter / limit).
 - If they want to create a new Redmine ticket/issue, use new_ticket with project (must be a real project name/identifier), title, and description. Do not invent a project.
 - The user message may include a replied-to Discord excerpt above a `---` separator. Treat deictic references (this, esto, all this, the above) as referring to that excerpt. Do not ask for clarification when the excerpt supplies the missing content.
+- Standing user prefs (if present in the system message) override defaults when choosing project aliases or language.
 - If you are unsure, use kind chat with a brief clarification question.
 - NEVER output approve, remove, show_config, or token — those are not available here.
 """
+
+
+def _router_system_with_memory(memory_block: str | None) -> str:
+    """Append compact user memory to the router system prompt when present."""
+    block = (memory_block or "").strip()
+    if not block:
+        return NL_ROUTER_SYSTEM
+    return f"{NL_ROUTER_SYSTEM}\n\n{block}\n"
 
 
 def extract_json_text(raw: str) -> str:
@@ -302,6 +311,7 @@ async def run_nl_router(
     user_text: str,
     via: str,
     on_chain_skip: ChainSkipCallback | None = None,
+    memory_block: str | None = None,
 ) -> NLRouterOutcome:
     """One LLM call: model returns JSON; parsed and validated in code."""
     ut = user_text.strip() if user_text else ""
@@ -309,7 +319,7 @@ async def run_nl_router(
         ut = "(empty message)"
     user_prompt = f"How should the bot respond?\n\nUser message (via={via}):\n{ut}"
     raw = await llm.complete(
-        system=NL_ROUTER_SYSTEM,
+        system=_router_system_with_memory(memory_block),
         user=user_prompt,
         on_chain_skip=on_chain_skip,
     )

@@ -123,6 +123,19 @@ from ultron.state_store import (
 )
 from ultron.textutil import chunk_discord
 from ultron.workflows import add_formatted_note, ask_about_issue, summarize_issue
+from ultron.user_memory import MemoryError, UserMemoryStore
+from ultron.nl_fastpath import (
+    NLMemoryClear,
+    NLMemoryShow,
+    NLMemoryUpdate,
+    try_nl_fastpath,
+)
+from ultron.write_confirm import (
+    ConfirmResult,
+    WriteConfirmView,
+    ask_write_confirm,
+    format_write_confirm_prompt,
+)
 
 logger = logging.getLogger(__name__)
 cmd_log = logging.getLogger("ultron.commands")
@@ -361,13 +374,16 @@ _HELP_TEXT = (
 • `/list_unassigned_issues` — Unassigned open issues past the minimum age (`discord.unassigned_open`).
 • `/find_issue` `text` — Full-text search for issues in the default Redmine project (`redmine.find_issue_project`, default **10_AMVARA**): subject, description, notes. Up to 20 titles (15 chars) + issue links; extras as issue-number links only.
 • `/top_tickets` `project` [`kind_filter`] [`limit`] — Top **open** issues in a project (fuzzy match on identifier or name). `kind_filter`: **priority** (default), **newests**, or **oldests**. `limit` default **10** (max 50).
-• `/new_ticket` `project` `title` `description` — Create a Redmine issue in an **existing** project (identifier or name; fuzzy match). Title and description are free text; other fields use Redmine defaults. Reply includes a link to the new issue.
+• `/new_ticket` `project` `title` `description` — Create a Redmine issue in an **existing** project (identifier or name; fuzzy match). Title and description are free text; other fields use Redmine defaults. **Confirm** before create. Reply includes a link to the new issue.
 • `/time_summary` `user` — Redmine **spent hours** for a user: **today**, **this week** (Mon–today), **last 7 days** (by **spent_on**), and **last 24 h** (by **created_on**). `user` = Redmine login, numeric id, or **`me`**. If login lookup fails (permissions), set **redmine.user_id_by_login** in `config.yaml`.
-• `/log_time` `issue_id` `hours` [`comments`] [`spent_on`] — Log spent hours (booked as the **Redmine API key** user). Optional **comments** and **spent_on** (YYYY-MM-DD). See **REDMINE_TIME_ACTIVITY_ID** in `.env` when Redmine has several activities.
+• `/log_time` `issue_id` `hours` [`comments`] [`spent_on`] — Log spent hours (booked as the **Redmine API key** user). Optional **comments** and **spent_on** (YYYY-MM-DD). **Confirm** before write. See **REDMINE_TIME_ACTIVITY_ID** in `.env` when Redmine has several activities.
 • `/summary` `issue_id` [`llm_provider`] [`llm_model`] — Ticket summary (requires LLM). Optional provider/model: autocomplete when configured; omit for defaults.
 • `/ask_issue` `issue_id` `question` [`llm_provider`] [`llm_model`] — Answer from the ticket text (requires LLM).
-• `/note` `issue_id` `text` [`llm_provider`] [`llm_model`] — Append an LLM-polished note (requires LLM).
+• `/note` `issue_id` `text` [`llm_provider`] [`llm_model`] — Append an LLM-polished note (requires LLM). **Confirm** before posting.
 • `/ol` `text` [`llm_provider`] [`llm_model`] — Ask the configured local model (Ollama when present in **llm_chain**) for technical or general advice. Advisory only — no shell or file access.
+• `/remember` `key` `content` — Save a durable personal note (project prefs, language, habits). Injected into NL/summary prompts. Growth checks free disk first.
+• `/forget` [`key`] — Delete one memory key, or omit key and set clear_all to wipe all.
+• `/memory` — List your durable memory entries.
 • `/audit` `host` `text` — Run an **Amvara server audit** on an allowlisted host (pi, cursor-agent fallback). SSH diagnostics via agents on the Ultron host.
 • `/ca` `host` `text` — Same as `/audit` but **cursor-agent only** (no pi fallback).
 
@@ -1497,6 +1513,7 @@ class UltronBot(commands.Bot):
         #: Counts of successful Redmine-mutating operations in this process (for `/status`).
         self._redmine_writes: dict[str, int] = {}
         self.amvara_registry: AmvaraRegistry = build_amvara_registry(app_cfg.amvara)
+        self.user_memory = UserMemoryStore(env.state_dir)
         try:
             warmed = warm_ssh_known_hosts(self.amvara_registry, app_cfg.amvara)
             logger.info(
@@ -1513,6 +1530,74 @@ class UltronBot(commands.Bot):
         if self.env.llm_api_key:
             literals.append(self.env.llm_api_key)
         return literals
+
+    def _user_memory_block(self, user_id: int) -> str:
+        """Compact standing prefs for LLM prompts (empty if none)."""
+        try:
+            return self.user_memory.format_for_prompt(user_id)
+        except Exception as exc:
+            logger.warning("user memory format failed user=%s: %s", user_id, exc)
+            return ""
+
+    async def _confirm_redmine_write(
+        self,
+        *,
+        author_id: int,
+        channel: discord.abc.Messageable,
+        summary: str,
+        status_message: discord.Message | None = None,
+    ) -> bool:
+        """Ask Confirm/Cancel; return True only on APPROVE."""
+        result = await ask_write_confirm(
+            channel=channel,
+            author_id=author_id,
+            summary=summary,
+            edit_message=status_message,
+        )
+        if result == ConfirmResult.APPROVE:
+            return True
+        if result == ConfirmResult.TIMEOUT:
+            logger.info("write confirm timeout user=%s", author_id)
+        return False
+
+    async def _confirm_slash_redmine_write(
+        self,
+        interaction: discord.Interaction,
+        *,
+        summary: str,
+        ephemeral: bool,
+    ) -> bool:
+        """Confirm via followup message (after defer or initial response)."""
+        view = WriteConfirmView(author_id=interaction.user.id)
+        content = format_write_confirm_prompt(summary)
+        try:
+            msg = await interaction.followup.send(
+                content, view=view, ephemeral=ephemeral, wait=True
+            )
+        except discord.HTTPException as exc:
+            logger.warning("slash write confirm prompt failed: %s", exc)
+            return False
+        result = await view.wait_result()
+        try:
+            await msg.edit(view=None)
+        except discord.HTTPException:
+            pass
+        if result == ConfirmResult.APPROVE:
+            return True
+        if result == ConfirmResult.TIMEOUT:
+            logger.info("slash write confirm timeout user=%s", interaction.user.id)
+        return False
+
+    def _format_memory_list(self, user_id: int) -> str:
+        """Discord markdown listing of durable memory entries."""
+        entries = self.user_memory.list_entries(user_id)
+        if not entries:
+            return "You have no durable memory entries yet. Use `/remember` or say “remember key: value”."
+        lines = ["**Your durable memory**"]
+        for key, content in sorted(entries.items()):
+            preview = content if len(content) <= 200 else content[:200] + "…"
+            lines.append(f"• `{key}` — {preview}")
+        return "\n".join(lines)
 
     async def _deliver_slash_feedback(
         self,
@@ -1747,7 +1832,24 @@ class UltronBot(commands.Bot):
         via: str,
         reply_ctx: ReplyContext | None = None,
     ) -> None:
-        """Existing single-shot NL router (Redmine-only or general)."""
+        """Fast-path → single-shot NL router (Redmine-only or general)."""
+        # Deterministic intents (summary #N, remember, ping, …) skip the LLM.
+        fast = try_nl_fastpath(user_text)
+        if fast is not None:
+            logger.info(
+                "source=chat | nl_fastpath | outcome=%s | user_id=%s",
+                type(fast).__name__,
+                message.author.id,
+                extra={"chat_phase": "ROUTER", "message_source": "chat"},
+            )
+            await self._dispatch_nl_router_outcome(
+                message,
+                fast,
+                status_message=status_message,
+                reply_ctx=reply_ctx,
+            )
+            return
+
         t0 = time.monotonic()
         on_skip = _llm_chain_skip_nl_discord_cb(
             message=message,
@@ -1755,6 +1857,7 @@ class UltronBot(commands.Bot):
             template=self.app_cfg.discord.llm_chain_skip_status,
             feature="nl_router",
         )
+        memory_block = self._user_memory_block(message.author.id)
 
         async def _on_llm_failure(user_msg: str, *, action: str) -> None:
             hosts = extract_amvara_hosts(user_text)
@@ -1777,6 +1880,7 @@ class UltronBot(commands.Bot):
                 user_text=user_text,
                 via=via,
                 on_chain_skip=on_skip,
+                memory_block=memory_block or None,
             )
         except NoLLMConfiguredError:
             await _nl_edit_or_reply(message, status_message, _NO_LLM_SLASH_MSG)
@@ -1836,11 +1940,53 @@ class UltronBot(commands.Bot):
     async def _dispatch_nl_router_outcome(
         self,
         message: discord.Message,
-        outcome: NLAdminRejected | NLParseError | NLChat | NLInvoke,
+        outcome: (
+            NLAdminRejected
+            | NLParseError
+            | NLChat
+            | NLInvoke
+            | NLMemoryUpdate
+            | NLMemoryClear
+            | NLMemoryShow
+        ),
         *,
         status_message: discord.Message | None,
         reply_ctx: ReplyContext | None = None,
     ) -> None:
+        if isinstance(outcome, NLMemoryShow):
+            await _nl_edit_or_reply(
+                message,
+                status_message,
+                self._format_memory_list(message.author.id),
+            )
+            log_chat_mention_output(message, action="memory show", feature="nl_fastpath")
+            return
+        if isinstance(outcome, NLMemoryUpdate):
+            try:
+                info = self.user_memory.update(
+                    message.author.id, outcome.key, outcome.content
+                )
+                await _nl_edit_or_reply(
+                    message,
+                    status_message,
+                    f"Remembered `{info['key']}` ({len(outcome.content)} chars).",
+                )
+            except MemoryError as exc:
+                await _nl_edit_or_reply(message, status_message, str(exc))
+            log_chat_mention_output(message, action="memory update", feature="nl_fastpath")
+            return
+        if isinstance(outcome, NLMemoryClear):
+            try:
+                msg = self.user_memory.clear(
+                    message.author.id,
+                    key=outcome.key,
+                    clear_all=outcome.clear_all,
+                )
+                await _nl_edit_or_reply(message, status_message, msg)
+            except MemoryError as exc:
+                await _nl_edit_or_reply(message, status_message, str(exc))
+            log_chat_mention_output(message, action="memory clear", feature="nl_fastpath")
+            return
         if isinstance(outcome, NLAdminRejected):
             logger.warning(
                 "source=chat | nl_router | rejected_admin_command | command=%s user_id=%s",
@@ -2455,11 +2601,30 @@ class UltronBot(commands.Bot):
                 await _reply_chunked_to_message(message, body, edit_first=status_message)
                 return
             if cmd == "new_ticket":
+                project = str(args["project"])
+                title = str(args["title"])
+                description = str(args["description"])
+                ok = await self._confirm_redmine_write(
+                    author_id=message.author.id,
+                    channel=message.channel,
+                    summary=(
+                        f"**Create issue** in project `{project}`\n"
+                        f"**Title:** {title[:200]}\n"
+                        f"**Description:** {description[:400]}"
+                        + ("…" if len(description) > 400 else "")
+                    ),
+                    status_message=status_message,
+                )
+                if not ok:
+                    await _nl_edit_or_reply(
+                        message, status_message, "Cancelled — no ticket created."
+                    )
+                    return
                 body, err, _iid = await create_new_ticket(
                     redmine=self.redmine,
-                    project_query=str(args["project"]),
-                    title=str(args["title"]),
-                    description=str(args["description"]),
+                    project_query=project,
+                    title=title,
+                    description=description,
                 )
                 if err is not None:
                     await _err(err)
@@ -2471,6 +2636,17 @@ class UltronBot(commands.Bot):
             if cmd == "log_time":
                 issue_id = int(args["issue_id"])
                 hours = float(args["hours"])
+                ok = await self._confirm_redmine_write(
+                    author_id=message.author.id,
+                    channel=message.channel,
+                    summary=f"**Log time** **{hours:g}** h on issue **#{issue_id}**.",
+                    status_message=status_message,
+                )
+                if not ok:
+                    await _nl_edit_or_reply(
+                        message, status_message, "Cancelled — no time logged."
+                    )
+                    return
                 try:
                     activities = await self.redmine.list_time_entry_activities()
                     activity_id = resolve_time_activity_id(
@@ -2576,6 +2752,7 @@ class UltronBot(commands.Bot):
                     on_before_llm=None,
                     on_llm_chain_skip=on_skip,
                     issue_metadata_header=self.app_cfg.discord.issue_metadata_header,
+                    memory_block=self._user_memory_block(message.author.id) or None,
                 )
                 await _reply_chunked_to_message(message, text, edit_first=status_message)
                 return
@@ -2597,6 +2774,7 @@ class UltronBot(commands.Bot):
                     on_before_llm=None,
                     on_llm_chain_skip=on_skip,
                     issue_metadata_header=self.app_cfg.discord.issue_metadata_header,
+                    memory_block=self._user_memory_block(message.author.id) or None,
                 )
                 await _reply_chunked_to_message(message, text, edit_first=status_message)
                 return
@@ -2617,8 +2795,24 @@ class UltronBot(commands.Bot):
                     log_read_messages=self.app_cfg.logging.log_read_messages,
                     on_llm_chain_skip=on_skip,
                     note_author_label=_discord_note_author_label(message.author),
+                    skip_post=True,
                 )
                 excerpt = posted[:500] + ("…" if len(posted) > 500 else "")
+                ok = await self._confirm_redmine_write(
+                    author_id=message.author.id,
+                    channel=message.channel,
+                    summary=(
+                        f"**Add note** to issue **#{issue_id}**\n\n"
+                        f"**Preview:**\n{excerpt}"
+                    ),
+                    status_message=status_message,
+                )
+                if not ok:
+                    await _nl_edit_or_reply(
+                        message, status_message, "Cancelled — note was not posted."
+                    )
+                    return
+                await self.redmine.add_note(issue_id, posted)
                 reply = f"Note added to [{issue_id}]({url}).\n\n**Preview:**\n{excerpt}"
                 self.record_redmine_write("issue_note")
                 await _reply_chunked_to_message(message, reply, edit_first=status_message)
@@ -2645,6 +2839,7 @@ class UltronBot(commands.Bot):
                     session_context=(
                         f"Discord user: {message.author} (id={message.author.id}). NL invoke: ol"
                     ),
+                    memory_block=self._user_memory_block(message.author.id) or None,
                     on_chain_skip=on_skip,
                 )
                 reply = format_ol_reply(display_model=display_model, body=body)
@@ -2889,6 +3084,7 @@ class UltronBot(commands.Bot):
                 start_provider=sp,
                 model_override=mo,
                 llm_display_model=display,
+                memory_block=self._user_memory_block(interaction.user.id) or None,
             )
             parts = chunk_discord(text)
             first, *rest = parts
@@ -3067,6 +3263,7 @@ class UltronBot(commands.Bot):
                 start_provider=sp,
                 model_override=mo,
                 llm_display_model=display,
+                memory_block=self._user_memory_block(interaction.user.id) or None,
             )
             parts = chunk_discord(text)
             first, *rest = parts
@@ -3215,8 +3412,28 @@ class UltronBot(commands.Bot):
                 note_author_label=_discord_note_author_label(interaction.user),
                 start_provider=sp,
                 model_override=mo,
+                skip_post=True,
             )
             excerpt = formatted[:500] + ("…" if len(formatted) > 500 else "")
+            status_msg = await interaction.original_response()
+            ok = await self._confirm_redmine_write(
+                author_id=interaction.user.id,
+                channel=interaction.channel,
+                summary=(
+                    f"**Add note** to issue **#{issue_id}**\n\n"
+                    f"**Preview:**\n{excerpt}"
+                ),
+                status_message=status_msg,
+            )
+            if not ok:
+                await _edit_or_followup(
+                    interaction,
+                    "Cancelled — note was not posted.",
+                    ephemeral=ephemeral,
+                )
+                log_slash_output("note", interaction, action="cancelled by user")
+                return
+            await self.redmine.add_note(issue_id, formatted)
             reply = f"Note added to [{issue_id}]({url}).\n\n**Preview:**\n{excerpt}"
             await _edit_or_followup(interaction, reply, ephemeral=ephemeral)
             self.record_redmine_write("issue_note")
@@ -3360,6 +3577,7 @@ class UltronBot(commands.Bot):
                 session_context=(
                     f"Discord user: {interaction.user} (id={interaction.user.id}). Command: /ol"
                 ),
+                memory_block=self._user_memory_block(interaction.user.id) or None,
                 on_chain_skip=on_skip,
                 on_progress=on_progress,
             )
@@ -4419,6 +4637,22 @@ class UltronBot(commands.Bot):
                 log_slash_output("new_ticket", interaction, action="missing required parameter")
                 return
             await interaction.response.defer(ephemeral=ephemeral, thinking=True)
+            ok = await self._confirm_slash_redmine_write(
+                interaction,
+                summary=(
+                    f"**Create issue** in project `{proj}`\n"
+                    f"**Title:** {tit[:200]}\n"
+                    f"**Description:** {desc[:400]}"
+                    + ("…" if len(desc) > 400 else "")
+                ),
+                ephemeral=ephemeral,
+            )
+            if not ok:
+                await interaction.followup.send(
+                    "Cancelled — no ticket created.", ephemeral=ephemeral
+                )
+                log_slash_output("new_ticket", interaction, action="cancelled by user")
+                return
             body, err, iid = await create_new_ticket(
                 redmine=self.redmine,
                 project_query=proj,
@@ -4560,6 +4794,17 @@ class UltronBot(commands.Bot):
                 ),
             )
             await interaction.response.defer(ephemeral=ephemeral, thinking=True)
+            ok = await self._confirm_slash_redmine_write(
+                interaction,
+                summary=f"**Log time** **{float(hours):g}** h on issue **#{issue_id}**.",
+                ephemeral=ephemeral,
+            )
+            if not ok:
+                await interaction.followup.send(
+                    "Cancelled — no time logged.", ephemeral=ephemeral
+                )
+                log_slash_output("log_time", interaction, action="cancelled by user")
+                return
             try:
                 activities = await self.redmine.list_time_entry_activities()
                 activity_id = resolve_time_activity_id(
@@ -4626,6 +4871,81 @@ class UltronBot(commands.Bot):
                     "hours": float(hours),
                 },
             )
+
+        @self.tree.command(
+            name="remember",
+            description="Save a durable personal note (prefs); injected into NL/LLM prompts.",
+        )
+        @app_commands.describe(
+            key="Short stable id (e.g. preferred_project)",
+            content="What Ultron should remember about you",
+        )
+        async def remember_cmd(
+            interaction: discord.Interaction,
+            key: str,
+            content: str,
+        ) -> None:
+            ephemeral = self.app_cfg.discord.ephemeral_default
+            log_slash_input(
+                "remember",
+                interaction,
+                fields=f"ephemeral={ephemeral} key={key!r} content_len={len(content)}",
+            )
+            try:
+                info = self.user_memory.update(interaction.user.id, key, content)
+            except MemoryError as exc:
+                await interaction.response.send_message(str(exc), ephemeral=True)
+                log_slash_output("remember", interaction, action="memory error")
+                return
+            await interaction.response.send_message(
+                f"Remembered `{info['key']}` ({len(content.strip())} chars). "
+                f"You have **{info['entries']}** entries.",
+                ephemeral=ephemeral,
+            )
+            log_slash_output("remember", interaction, action="memory saved")
+
+        @self.tree.command(
+            name="forget",
+            description="Delete one durable memory key, or wipe all with clear_all.",
+        )
+        @app_commands.describe(
+            key="Exact memory key to delete (optional if clear_all)",
+            clear_all="If true, wipe all of your durable memory",
+        )
+        async def forget_cmd(
+            interaction: discord.Interaction,
+            key: str | None = None,
+            clear_all: bool = False,
+        ) -> None:
+            ephemeral = self.app_cfg.discord.ephemeral_default
+            log_slash_input(
+                "forget",
+                interaction,
+                fields=f"ephemeral={ephemeral} key={key!r} clear_all={clear_all}",
+            )
+            try:
+                msg = self.user_memory.clear(
+                    interaction.user.id,
+                    key=key,
+                    clear_all=bool(clear_all),
+                )
+            except MemoryError as exc:
+                await interaction.response.send_message(str(exc), ephemeral=True)
+                log_slash_output("forget", interaction, action="memory error")
+                return
+            await interaction.response.send_message(msg, ephemeral=ephemeral)
+            log_slash_output("forget", interaction, action="memory cleared")
+
+        @self.tree.command(
+            name="memory",
+            description="List your durable personal memory entries.",
+        )
+        async def memory_cmd(interaction: discord.Interaction) -> None:
+            ephemeral = self.app_cfg.discord.ephemeral_default
+            log_slash_input("memory", interaction, fields=f"ephemeral={ephemeral}")
+            body = self._format_memory_list(interaction.user.id)
+            await interaction.response.send_message(body[:_DISCORD_MSG_MAX], ephemeral=ephemeral)
+            log_slash_output("memory", interaction, action="memory listed")
 
         def _dev_placeholder_handler(slot: int):
             cmd_name = f"dev_slot_{slot}"

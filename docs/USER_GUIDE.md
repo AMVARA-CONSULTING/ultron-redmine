@@ -27,7 +27,8 @@ This document is for **people who use the bot in Discord**, not for server opera
 | **`/find_issue`** | Full-text search for issues in the default Redmine project (allowlisted). |
 | **`/issues_by_status`** | List issues in a Redmine status you name (allowlisted; same age/limit rules as new-issue listings). |
 | **`/time_summary`** | Spent-hours totals for a Redmine user (`me`, login, or id) (allowlisted). |
-| **`/log_time`** | Log spent hours on an issue (booked as the Redmine API key user) (allowlisted). |
+| **`/log_time`** | Log spent hours on an issue — **Confirm** before write (allowlisted). |
+| **`/remember`** / **`/forget`** / **`/memory`** | Durable personal prefs (injected into NL/LLM prompts; disk-space checked before growth). |
 | **`/rpsls`** | Rock–paper–scissors–lizard–Spock vs the bot (allowlisted). |
 
 Command map and setup pointers: [README.md](../README.md). In Discord, **`/help`** is always current.
@@ -36,7 +37,7 @@ Use **`/summary`**, **`/ask_issue`**, **`/note`**, and **`/ol`** only when you a
 
 **`/audit`** and **`/ca`** run server diagnostics on allowlisted Amvara hosts (when your operator has configured them). **`/audit`** tries pi first and falls back to **cursor-agent** if pi fails or **Ollama is busy/unreachable**; **`/ca`** uses cursor-agent only. You can also @mention the bot with a host name (e.g. “check RAM on amvara3”) or combine an audit with a Redmine note in one message. If the language model (Ollama) does not respond for natural-language or slash LLM commands, **cursor-agent** can take over when the operator has enabled that fallback.
 
-If you **@mention** the bot (or **reply** to one of its messages) in a channel or DM and you are allowlisted, behavior depends on host settings: with routing **on** and an LLM configured, the bot posts a short **status line** and **updates that same message** while it works (routing → running the chosen action → final answer), similar to slash “thinking” feedback. If routing is **off**, you get a brief notice instead. If nothing happens, ask your operator to confirm you are **whitelisted** and, if needed, **Message Content Intent** + **`DISCORD_MESSAGE_CONTENT_INTENT`** in the bot host configuration.
+If you **@mention** the bot (or **reply** to one of its messages) in a channel or DM and you are allowlisted, behavior depends on host settings: with routing **on** and an LLM configured, the bot posts a short **status line** and **updates that same message** while it works (routing → running the chosen action → final answer), similar to slash “thinking” feedback. Obvious intents such as **“summarize #123”**, **“ping”**, or **“remember key: value”** skip the LLM (fast-path). Mutating Redmine actions (**note**, **new ticket**, **log time**) ask for **Confirm / Cancel**. If routing is **off**, you get a brief notice instead. If nothing happens, ask your operator to confirm you are **whitelisted** and, if needed, **Message Content Intent** + **`DISCORD_MESSAGE_CONTENT_INTENT`** in the bot host configuration.
 
 ## Whitelist vs bot admins
 

@@ -34,7 +34,7 @@ Implemented in [`ultron/settings.py`](../ultron/settings.py):
 Paths:
 
 - **`CONFIG_PATH`** — YAML file (default `./config.yaml` relative to the process working directory); bootstrap only, not remapped by `environment_bindings`.
-- **`ULTRON_STATE_DIR`** — Whitelist, admins, pending tokens (`whitelist.json`, `admins.json`, etc.); default env name is overridable via `environment_bindings.ultron_state_dir_env`.
+- **`ULTRON_STATE_DIR`** — Whitelist, admins, pending tokens (`whitelist.json`, `admins.json`, etc.), and **per-user durable memory** under `user_memory/user_<discord_id>.json`; default env name is overridable via `environment_bindings.ultron_state_dir_env`. Memory growth checks free disk space before expanding.
 
 ## Redmine
 
