@@ -1,3 +1,12 @@
+---
+## Closing summary (TOP)
+
+- **What happened:** Ultron 3.0 durable per-user memory needed a correctness review, edge-case tests, and hardening for secrets, path safety, and prompt injection.
+- **What was done:** Reviewed `user_memory.py`; hard-rejected secret-shaped content; sanitized prompt hygiene; tightened owner path resolution; expanded pytest coverage (shipped as 3.0.1+).
+- **What was tested:** `tests/test_user_memory.py` 19 passed; full suite 272 passed; version parity 3.0.9; live Discord smoke not run (optional SKIP).
+- **Why closed:** All acceptance criteria passed on `main`; optional Discord follow-up left for operators after dump/restart.
+- **Closed at (UTC):** 2026-07-28 23:30
+---
 # Review & harden per-user durable memory (disk growth guards)
 
 ## Tracker
@@ -57,3 +66,29 @@ Ultron **3.0.0** added `ultron/user_memory.py` with per-Discord-user JSON under 
    - `/remember leak: Bearer FAKESECRET_g1h2i3j4k5l6m7n8o9p0` → error mentioning secret (no file growth for that key)
    - `/forget preferred_project` → gone from `/memory`
 3. Confirm `__version__` / `pyproject.toml` both show `3.0.1`.
+
+## Test report
+
+- **When:** 2026-07-28 23:29:37–23:29:59 UTC
+- **Environment:** branch `main` @ `4925128`, `.venv` Python 3.13.5 / pytest 9.1.1, Ultron **3.0.9** (`__version__` == `pyproject.toml`)
+
+### What was tested
+
+1. Editable install + `tests/test_user_memory.py` (19 cases; task expected ≥17).
+2. Full suite `.venv/bin/pytest -q`.
+3. Version parity `__version__` / `pyproject.toml` (≥ **3.0.1**).
+4. Optional live Discord `/remember`/`/forget` not run (no Discord session in this tester step).
+
+### Results
+
+| Criterion | Result | Evidence |
+|-----------|--------|----------|
+| Expanded `test_user_memory` green | **PASS** | `19 passed in 0.11s` (content length, clear_all, corrupt JSON, owner sanitization, secrets reject, sanitize, truncate, legacy secret skip, concurrent keys, count/status) |
+| Disk growth blocked; shrink/forget allowed | **PASS** | Covered by existing growth/shrink cases in the same file; suite green |
+| No secrets in fixtures/task notes | **PASS** | Secret fixtures use fake tokens only; hard-reject paths tested; this report has no live secrets |
+| Version ≥ 3.0.1 both files | **PASS** | `ultron 3.0.9` / `version = "3.0.9"` |
+| Full suite | **PASS** | `272 passed, 35 warnings in 7.98s` (discord utils DeprecationWarning only) |
+
+### Overall: **PASS**
+
+Automated acceptance is met on current `main`. Optional Discord smoke for `/remember` secret reject and `/forget` remains for operators after dump/restart; unit coverage already locks those behaviors.
