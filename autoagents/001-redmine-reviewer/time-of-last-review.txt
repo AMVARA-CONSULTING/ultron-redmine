@@ -35,3 +35,9 @@ FEAT created: 0 (Redmine) + 0 (GitHub) = 0
 NEW created: 0 (logs)
 Notes: Synced main. Redmine via .venv (preflight lacked httpx) — Ultron-related open: umbrella #7406 already CLOSED-7406-* in done/; smoke #7757/#7758 "safe to close" (not product work); #7407 Ollama host ops; other open issues non-Ultron (POS2/Cometa/etc.). GH open issues []. Log hits: approve unknown-token INFO (expected deny / ERROR substring false-positive); LLM Ollama timeout/connection on 2026-07-20 is provider/ops with user-visible fail path — not standing code incidents. Bot currently healthy (v3.0.5 startup). No NEW-/FEAT- created.
 Preflight: G001_REDMINE_OK=0 G001_GH_OK=1 G001_GH_AUTH_FAILED=0 G001_UNTRACKED_REDMINE=0 G001_UNTRACKED_GH=0 G001_LOG_SIGNALS=1
+
+=== 2026-07-28T23:10:58Z ===
+FEAT created: 0 (Redmine) + 0 (GitHub) = 0
+NEW created: 0 (logs)
+Notes: Synced main. Redmine via curl (preflight lacked httpx) — Ultron-related open: umbrella #7406 already CLOSED-7406-* in done/; smoke #7757/#7758 "safe to close" (not product work); #7407 Ollama host ops; other open issues non-Ultron (POS2/MIF/Cometa/etc.). GH open issues []. Log hits: approve unknown-token INFO (expected deny / ERROR substring false-positive); LLM Ollama timeout/connection on 2026-07-20 is provider/ops with user-visible fail path — not standing code incidents. Bot healthy (v3.0.7 startup). No NEW-/FEAT- created.
+Preflight: G001_REDMINE_OK=0 G001_GH_OK=1 G001_GH_AUTH_FAILED=0 G001_UNTRACKED_REDMINE=0 G001_UNTRACKED_GH=0 G001_LOG_SIGNALS=1

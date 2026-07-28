@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
 import shutil
 import threading
@@ -32,8 +33,85 @@ _MAX_PROMPT_CHARS = MEMORY_PROMPT_MAX_CHARS
 _MAX_FILE_BYTES = 64 * 1024
 # Refuse growth when free space on the memory volume is below this floor.
 _MIN_FREE_BYTES = 100 * 1024 * 1024
+# Public alias for doctor / ops checks (same floor as assert_can_grow).
+MIN_FREE_BYTES = _MIN_FREE_BYTES
 # Extra headroom required beyond the projected write size.
 _WRITE_HEADROOM_BYTES = 1 * 1024 * 1024
+
+
+def _fmt_disk_bytes(n: int) -> str:
+    """Human-readable size for doctor output (MiB / GiB)."""
+    if n < 0:
+        return "unknown"
+    mib = n / (1024 * 1024)
+    if mib >= 1024:
+        return f"{mib / 1024:.1f} GiB"
+    return f"{mib:.0f} MiB"
+
+
+def count_user_memory_files(memory_root: Path) -> int:
+    """Count ``user_*.json`` files under ``memory_root`` (no content read)."""
+    if not memory_root.is_dir():
+        return 0
+    return sum(
+        1
+        for p in memory_root.iterdir()
+        if p.is_file() and p.name.startswith("user_") and p.suffix == ".json"
+    )
+
+
+def doctor_user_memory_lines(
+    state_dir: Path | str,
+    *,
+    min_free_bytes: int = _MIN_FREE_BYTES,
+) -> list[str]:
+    """Read-only health lines for ``ultron doctor`` (no mkdir, no entry values).
+
+    Reports whether ``<state_dir>/user_memory`` exists and is writable, free
+    disk vs the growth floor, and the count of ``user_*.json`` files.
+    """
+    root = Path(state_dir) / USER_MEMORY_DIRNAME
+    lines: list[str] = [f"  path:              {root}"]
+
+    if root.is_dir():
+        lines.append("  directory:         present")
+        writable = os.access(root, os.W_OK | os.X_OK)
+        lines.append(f"  writable:          {'yes' if writable else 'no'}")
+        usage_path = root
+        n_files = count_user_memory_files(root)
+    elif root.exists():
+        lines.append("  directory:         present (not a directory)")
+        lines.append("  writable:          no")
+        usage_path = root.parent if root.parent.exists() else Path.cwd()
+        n_files = 0
+    else:
+        lines.append("  directory:         missing")
+        parent = root.parent
+        parent_writable = parent.is_dir() and os.access(parent, os.W_OK | os.X_OK)
+        lines.append(
+            f"  writable:          n/a (parent {'writable' if parent_writable else 'not writable'})"
+        )
+        usage_path = parent if parent.exists() else Path.cwd()
+        n_files = 0
+
+    floor = max(0, int(min_free_bytes))
+    try:
+        free = int(shutil.disk_usage(usage_path).free)
+    except OSError:
+        free = -1
+        lines.append(f"  free disk:         unknown (floor {_fmt_disk_bytes(floor)})")
+    else:
+        if free < floor:
+            verdict = "LOW (growth blocked)"
+        else:
+            verdict = "OK"
+        lines.append(
+            f"  free disk:         {_fmt_disk_bytes(free)} "
+            f"(floor {_fmt_disk_bytes(floor)}) — {verdict}"
+        )
+
+    lines.append(f"  user_*.json files: {n_files}")
+    return lines
 
 # High-confidence secret shapes — hard-reject on /remember (no soft-store).
 _SECRET_PATTERNS: tuple[re.Pattern[str], ...] = (
@@ -225,13 +303,7 @@ class UserMemoryStore:
 
     def count_user_files(self) -> int:
         """Count per-user JSON files under the store (no content read)."""
-        if not self.root.is_dir():
-            return 0
-        return sum(
-            1
-            for p in self.root.iterdir()
-            if p.is_file() and p.name.startswith("user_") and p.suffix == ".json"
-        )
+        return count_user_memory_files(self.root)
 
     def status_line(self) -> str:
         """Non-secret one-liner for ``/status`` (file count only)."""

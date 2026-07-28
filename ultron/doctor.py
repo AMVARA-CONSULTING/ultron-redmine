@@ -15,6 +15,7 @@ from ultron.llm import LLMChainClient, NullLLMBackend, format_llm_endpoint, safe
 from ultron.redmine import RedmineClient, RedmineError
 from ultron.settings import load_env
 from ultron.startup_llm import build_llm_backend
+from ultron.user_memory import doctor_user_memory_lines
 
 # Env vars that must never print values in the bindings table (only set/unset + masked).
 _SECRET_BINDING_FIELDS = frozenset(
@@ -72,6 +73,11 @@ def run_doctor() -> int:
     state_dir = Path(os.environ.get(env.environment_bindings.ultron_state_dir_env, "") or "data")
     state_resolved = state_dir.expanduser().resolve()
     print(f"  state_dir:         {state_resolved} (env {env.environment_bindings.ultron_state_dir_env!r})")
+
+    print()
+    print("User memory")
+    for line in doctor_user_memory_lines(state_resolved):
+        print(line)
 
     print()
     print("Environment bindings (names from config; values from process environment)")
