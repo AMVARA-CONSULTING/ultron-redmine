@@ -61,6 +61,15 @@ Commands that **change Redmine** always show a short preview and **Confirm / Can
 
 Only the user who started the action can press the buttons. **Cancel** or timeout means **nothing was written**. Read-only commands (`/summary`, `/ask_issue`, listings, memory) do not ask for Confirm.
 
+### Quick Discord smoke (memory + fast-path + confirms)
+
+For operators verifying Ultron **3.0** on a live guild (full checklist with expected outcomes: [OPERATIONS.md](OPERATIONS.md) → **Manual Discord smoke**):
+
+1. **`/status`** → **v3.0.x**
+2. **`/remember`** → **`/memory`** lists the key; then **`/forget`** removes it
+3. **`@Ultron summarize #N`** → summary without a long routing delay when fast-path hits
+4. **`/log_time`** / **`/note`** → **Confirm** writes; **Cancel** does not
+
 ## Whitelist vs bot admins
 
 - **Whitelist** — Users who may use Redmine-related slash commands (`/summary`, `/ask_issue`, `/note`, `/ol`, `/audit`, `/ca`, `/list_new_issues`, `/list_unassigned_issues`, `/find_issue`, etc.) as configured by your team.

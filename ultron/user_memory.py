@@ -26,7 +26,9 @@ _KEY_RE = re.compile(r"^[a-zA-Z][a-zA-Z0-9_.-]{0,63}$")
 _MAX_KEY_LEN = 64
 _MAX_CONTENT_LEN = 500
 _MAX_ENTRIES = 20
-_MAX_PROMPT_CHARS = 1200
+# Cap when injecting memory into router/summary/ask/ol prompts (docs/OPERATIONS.md).
+MEMORY_PROMPT_MAX_CHARS = 1200
+_MAX_PROMPT_CHARS = MEMORY_PROMPT_MAX_CHARS
 _MAX_FILE_BYTES = 64 * 1024
 # Refuse growth when free space on the memory volume is below this floor.
 _MIN_FREE_BYTES = 100 * 1024 * 1024
@@ -289,7 +291,7 @@ class UserMemoryStore:
         self,
         owner_id: int | str,
         *,
-        max_chars: int = _MAX_PROMPT_CHARS,
+        max_chars: int = MEMORY_PROMPT_MAX_CHARS,
     ) -> str:
         """Compact standing notes for LLM system/user injection (content only).
 

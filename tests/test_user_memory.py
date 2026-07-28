@@ -11,6 +11,7 @@ from unittest.mock import patch
 import pytest
 
 from ultron.user_memory import (
+    MEMORY_PROMPT_MAX_CHARS,
     MemoryDiskFullError,
     MemoryValidationError,
     UserMemoryStore,
@@ -149,6 +150,16 @@ def test_format_for_prompt_truncates(tmp_path: Path) -> None:
     store.update(5, "long", "word " * 40)
     block = store.format_for_prompt(5, max_chars=80)
     assert len(block) <= 80
+    assert "truncated" in block
+
+
+def test_format_for_prompt_default_budget(tmp_path: Path) -> None:
+    """Many max-size entries still fit under MEMORY_PROMPT_MAX_CHARS."""
+    store = UserMemoryStore(tmp_path, min_free_bytes=0)
+    for i in range(20):
+        store.update(7, f"key{i}", "x" * 500)
+    block = store.format_for_prompt(7)
+    assert len(block) <= MEMORY_PROMPT_MAX_CHARS
     assert "truncated" in block
 
 

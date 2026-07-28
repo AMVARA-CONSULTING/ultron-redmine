@@ -110,3 +110,21 @@ def test_report_llm_unknown_backend(capsys) -> None:
     asyncio.run(smoke.report_llm(WeirdBackend()))  # type: ignore[arg-type]
     out = capsys.readouterr().out
     assert "SKIP LLM: unexpected backend WeirdBackend" in out
+
+
+def test_parse_semver() -> None:
+    smoke = _load_smoke_check()
+    assert smoke._parse_semver("3.0.6") == (3, 0, 6)
+    assert smoke._parse_semver("3.0.0+local") == (3, 0, 0)
+    assert smoke._parse_semver("2.9.9") == (2, 9, 9)
+
+
+def test_check_ultron30_offline(capsys) -> None:
+    smoke = _load_smoke_check()
+    assert smoke.check_ultron30_offline() is True
+    out = capsys.readouterr().out
+    assert "OK version:" in out
+    assert "OK user_memory:" in out
+    assert "OK nl_fastpath:" in out
+    assert "OK write_confirm:" in out
+    assert "FAIL" not in out

@@ -1,5 +1,12 @@
 from __future__ import annotations
 
+# Default prompt budgets for Gemma-class / local LLMs (see docs/OPERATIONS.md).
+# Keep these tight: per-field caps usually land under the total; the total is a hard backstop.
+ISSUE_SUMMARY_MAX_DESCRIPTION_CHARS = 4000
+ISSUE_SUMMARY_MAX_JOURNAL_NOTES = 12
+ISSUE_SUMMARY_MAX_NOTE_CHARS = 800
+ISSUE_SUMMARY_MAX_TOTAL_CHARS = 8000
+
 
 def format_issue_metadata_header(issue: dict) -> str:
     """One-line Discord markdown: note count, logged time, last update (Redmine issue JSON)."""
@@ -42,15 +49,16 @@ def chunk_discord(text: str, limit: int = 1900) -> list[str]:
 def format_issue_for_summary(
     issue: dict,
     *,
-    max_description_chars: int = 4000,
-    max_journal_notes: int = 12,
-    max_note_chars: int = 800,
-    max_total_chars: int = 8000,
+    max_description_chars: int = ISSUE_SUMMARY_MAX_DESCRIPTION_CHARS,
+    max_journal_notes: int = ISSUE_SUMMARY_MAX_JOURNAL_NOTES,
+    max_note_chars: int = ISSUE_SUMMARY_MAX_NOTE_CHARS,
+    max_total_chars: int = ISSUE_SUMMARY_MAX_TOTAL_CHARS,
 ) -> str:
     """Render a Redmine issue for LLM prompts (compact defaults for small models).
 
     Why: Gemma-class context windows fill quickly; aggressive truncation keeps
     summary/ask prompts useful without drowning the model in old journals.
+    Length is always ≤ ``max_total_chars`` (hard backstop after per-field caps).
     """
     lines: list[str] = []
     lines.append(f"#{(issue.get('id'))}: {issue.get('subject', '')}")

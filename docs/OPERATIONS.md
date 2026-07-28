@@ -36,6 +36,28 @@ Paths:
 - **`CONFIG_PATH`** — YAML file (default `./config.yaml` relative to the process working directory); bootstrap only, not remapped by `environment_bindings`.
 - **`ULTRON_STATE_DIR`** — Whitelist, admins, pending tokens (`whitelist.json`, `admins.json`, etc.), and **per-user durable memory** under `user_memory/user_<discord_id>.json`; default env name is overridable via `environment_bindings.ultron_state_dir_env`. Memory growth checks free disk space before expanding. Writes that look like secrets (API keys, `Bearer` tokens, private key PEM blocks) are **hard-rejected**. Prompt injection wrappers (markdown fences / role prefixes) are stripped before store and again at prompt injection. Shrink/`/forget` still works when free space is below the floor. Discord **`/status`** reports a non-secret **`user_memory: ready (N files)`** count (no entry contents).
 
+## Gemma / local LLM prompt budgets
+
+Ultron is tuned for **gemma4**-class models on Ollama (~8–9GB). Ticket dumps and user memory are hard-capped so summary/ask/router prompts stay useful without overflowing context.
+
+| Cap | Default | Where |
+|-----|---------|--------|
+| Issue description | **4000** chars | `ISSUE_SUMMARY_MAX_DESCRIPTION_CHARS` in [`ultron/textutil.py`](../ultron/textutil.py) |
+| Journal notes included | **12** most recent with text | `ISSUE_SUMMARY_MAX_JOURNAL_NOTES` |
+| Per-note body | **800** chars | `ISSUE_SUMMARY_MAX_NOTE_CHARS` |
+| Full ticket dump | **8000** chars (hard backstop) | `ISSUE_SUMMARY_MAX_TOTAL_CHARS` — appends `…(ticket truncated for LLM)` |
+| User memory injection | **1200** chars | `MEMORY_PROMPT_MAX_CHARS` in [`ultron/user_memory.py`](../ultron/user_memory.py) |
+
+**Ballpark sizes (measured at implement time):**
+
+- NL router system prompt alone: ~**3.3k** chars; with max memory appended: ~**4.5k**.
+- Summary system prompt: ~**200** chars (short on purpose).
+- Summary **user** prompt with max memory + fat ticket: ~**9.3k** chars (memory prefix once + ticket ≤ 8k). Workflow logs `prompt_chars=` on the `FETCH` step (`wf_info` in [`ultron/workflows.py`](../ultron/workflows.py)).
+
+Memory is loaded once per call via `_user_memory_block` / `format_for_prompt` and passed as a single `memory_block` (router: appended to system; summary/ask/ol: prepended to user). Do **not** raise the ticket dump defaults without measuring against the host model’s context window.
+
+**Router model tip:** routing only needs a short JSON intent; a smaller model from `llm_chain`’s model list (when configured) can be used for NL routing while leaving gemma4 for summary/ask — not required for correctness if gemma4 latency is acceptable.
+
 ## Redmine
 
 - Startup calls **`RedmineClient.verify_connection()`** → `GET /users/current.json` (see [`ultron/redmine.py`](../ultron/redmine.py)). Failure aborts startup.
@@ -167,7 +189,26 @@ Agent logs: **`data/self-upgrade/`** under **`ULTRON_STATE_DIR`**.
 ## Health checks
 
 - **Startup:** Log lines include Redmine OK / LLM backend (or none). Optional line to `registration_log` when enabled.
-- **Smoke script (no Discord):** [`scripts/smoke_check.py`](../scripts/smoke_check.py) — optional Redmine/LLM connectivity from `.env`. Unwraps the cursor-agent LLM fallback wrapper (same as `ultron doctor`) so the chain primary is pinged.
+- **Smoke script (no Discord):** [`scripts/smoke_check.py`](../scripts/smoke_check.py) — always runs offline Ultron **3.0** checks (version ≥ 3.0.0, `UserMemoryStore`, NL fast-path, write-confirm helpers), then optional Redmine/LLM connectivity from `.env`. Unwraps the cursor-agent LLM fallback wrapper (same as `ultron doctor`) so the chain primary is pinged.
+
+```bash
+python scripts/smoke_check.py
+# Expect: OK version / OK user_memory / OK nl_fastpath / OK write_confirm
+# Plus OK or SKIP for Redmine and LLM depending on .env
+```
+
+### Manual Discord smoke (Ultron 3.0 — memory, fast-path, confirms)
+
+Run on a host with the live bot (e.g. amvara4) after dump/restart. Use a **whitelist** account and a **safe test issue**.
+
+1. **`/status`** — shows Ultron **v3.0.x** and a non-secret **user_memory: ready (N files)** line.
+2. **`/remember`** `preferred_project` = `10_AMVARA` → ack; **`/memory`** lists it; `data/user_memory/user_<id>.json` appears under `ULTRON_STATE_DIR`.
+3. **`@Ultron summarize #<known-issue>`** — fast-path should skip a long “routing…” LLM delay when the intent is obvious; summary returns.
+4. **`/log_time`** on a safe test issue with tiny hours → **Confirm** → time logged; repeat and **Cancel** → no new entry.
+5. **`/note`** → preview **Confirm** → **Cancel** → journal unchanged.
+6. **`/forget`** `preferred_project` → gone from **`/memory`**.
+
+Also covered in [USER_GUIDE.md](USER_GUIDE.md) (Durable memory / Write confirmation).
 
 ## Autoagents loop (optional)
 
