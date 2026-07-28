@@ -30,7 +30,7 @@ This document is for **people who use the bot in Discord**, not for server opera
 | **`/log_time`** | Log spent hours on an issue (booked as the Redmine API key user) (allowlisted). |
 | **`/rpsls`** | Rock–paper–scissors–lizard–Spock vs the bot (allowlisted). |
 
-Full options and operator notes: [README.md — Command overview](../README.md#command-overview).
+Command map and setup pointers: [README.md](../README.md). In Discord, **`/help`** is always current.
 
 Use **`/summary`**, **`/ask_issue`**, **`/note`**, and **`/ol`** only when you are allowlisted **and** the bot has an LLM configured; otherwise the bot replies with setup instructions for operators. **`/ol`** is for general or technical questions (Redmine, Ultron, Linux) — advisory only, not ticket-specific like **`/ask_issue`**.
 
@@ -52,5 +52,6 @@ If a command says you are not allowed, follow your organization’s process (oft
 
 ## Need more detail?
 
-- Full command matrix: [README.md — Slash commands](../README.md#slash-commands)
+- Live command list: **`/help`** in Discord
 - Host-side setup: [OPERATIONS.md](OPERATIONS.md)
+- Repo overview: [README.md](../README.md)

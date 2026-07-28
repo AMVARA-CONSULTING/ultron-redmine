@@ -63,7 +63,7 @@ pip install -e ".[wizard]"
 ultron wizard
 ```
 
-See [README.md — Configuration wizard](../README.md#configuration-wizard-terminal). Implementation lives under [`ultron/wizard/`](../ultron/wizard/).
+See [README.md](../README.md) (wizard one-liner). Implementation lives under [`ultron/wizard/`](../ultron/wizard/).
 
 ## systemd (example)
 
