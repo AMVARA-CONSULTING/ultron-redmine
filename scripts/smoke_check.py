@@ -11,6 +11,24 @@ sys.path.insert(0, str(ROOT))
 
 from dotenv import load_dotenv
 
+from ultron.llm import LLMBackend, NullLLMBackend, format_llm_endpoint
+from ultron.llm_cursor_fallback import LLMWithCursorAgentFallback, llm_chain_client
+
+
+async def report_llm(llm: LLMBackend) -> None:
+    """Ping the chain primary (unwrap cursor-agent fallback). Print OK / SKIP."""
+    if isinstance(llm, NullLLMBackend):
+        print("SKIP LLM: not configured")
+        return
+    chain = llm_chain_client(llm)
+    if chain is None:
+        print(f"SKIP LLM: unexpected backend {type(llm).__name__}")
+        return
+    await chain.ping_primary()
+    ep = format_llm_endpoint(chain.primary_base_url)
+    fb = " + cursor-agent LLM fallback" if isinstance(llm, LLMWithCursorAgentFallback) else ""
+    print(f"OK LLM: chain primary model={chain.model!r} @ {ep}{fb}")
+
 
 def main() -> int:
     load_dotenv(ROOT / ".env")
@@ -52,7 +70,6 @@ def main() -> int:
 
     async def llm_ping() -> None:
         from ultron.config import load_config
-        from ultron.llm import LLMChainClient, NullLLMBackend, format_llm_endpoint
         from ultron.startup_llm import build_llm_backend
 
         cfg_path = Path(env.config_path).expanduser()
@@ -61,16 +78,7 @@ def main() -> int:
             return
         cfg = load_config(cfg_path)
         built = build_llm_backend(env, cfg)
-        llm = built.backend
-        if isinstance(llm, NullLLMBackend):
-            print("SKIP LLM: not configured")
-            return
-        if not isinstance(llm, LLMChainClient):
-            print(f"SKIP LLM: unexpected backend {type(llm).__name__}")
-            return
-        await llm.ping_primary()
-        ep = format_llm_endpoint(llm.primary_base_url)
-        print(f"OK LLM: chain primary model={llm.model!r} @ {ep}")
+        await report_llm(built.backend)
 
     try:
         asyncio.run(llm_ping())

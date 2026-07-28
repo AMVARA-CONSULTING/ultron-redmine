@@ -23,7 +23,7 @@ This document is for **people who use the bot in Discord**, not for server opera
 |--------|----------------|
 | **`/help`** | Lists commands and who may use them (everyone). |
 | **`/ping`** | Quick connectivity check (allowlisted users). |
-| **`/status`** | Bot summary: version, uptime, latency, Redmine host, LLM, NL routing, reports (allowlisted). |
+| **`/status`** | Bot summary: version, uptime, latency, Redmine host, LLM, NL routing, durable memory file count, reports (allowlisted). |
 | **`/find_issue`** | Full-text search for issues in the default Redmine project (allowlisted). |
 | **`/issues_by_status`** | List issues in a Redmine status you name (allowlisted; same age/limit rules as new-issue listings). |
 | **`/time_summary`** | Spent-hours totals for a Redmine user (`me`, login, or id) (allowlisted). |
@@ -38,6 +38,28 @@ Use **`/summary`**, **`/ask_issue`**, **`/note`**, and **`/ol`** only when you a
 **`/audit`** and **`/ca`** run server diagnostics on allowlisted Amvara hosts (when your operator has configured them). **`/audit`** tries pi first and falls back to **cursor-agent** if pi fails or **Ollama is busy/unreachable**; **`/ca`** uses cursor-agent only. You can also @mention the bot with a host name (e.g. “check RAM on amvara3”) or combine an audit with a Redmine note in one message. If the language model (Ollama) does not respond for natural-language or slash LLM commands, **cursor-agent** can take over when the operator has enabled that fallback.
 
 If you **@mention** the bot (or **reply** to one of its messages) in a channel or DM and you are allowlisted, behavior depends on host settings: with routing **on** and an LLM configured, the bot posts a short **status line** and **updates that same message** while it works (routing → running the chosen action → final answer), similar to slash “thinking” feedback. Obvious intents such as **“summarize #123”**, **“ping”**, or **“remember key: value”** skip the LLM (fast-path). Mutating Redmine actions (**note**, **new ticket**, **log time**) ask for **Confirm / Cancel**. If routing is **off**, you get a brief notice instead. If nothing happens, ask your operator to confirm you are **whitelisted** and, if needed, **Message Content Intent** + **`DISCORD_MESSAGE_CONTENT_INTENT`** in the bot host configuration.
+
+## Durable memory
+
+Allowlisted users can store short personal prefs that Ultron injects into NL routing and LLM prompts (summaries, ask, `/ol`):
+
+| Command | What it does |
+|--------|----------------|
+| **`/remember`** `key` `content` | Save or replace one entry (e.g. `preferred_project`). |
+| **`/forget`** | Delete one `key`, or set **`clear_all`** to wipe all of yours. |
+| **`/memory`** | List your entries. |
+
+Natural language works too when allowlisted: **“remember preferred_project: 10_AMVARA”**, **“forget preferred_project”**, **“show memory”**. The host checks **free disk space** before memory growth; shrink/`/forget` still works when space is low. Do not store secrets (API keys, tokens, private keys) — those are rejected. **`/status`** shows a non-secret **user_memory: ready (N files)** line for operators.
+
+## Write confirmation
+
+Commands that **change Redmine** always show a short preview and **Confirm / Cancel** buttons before writing:
+
+- **`/note`** (and @mention “add a note…”)
+- **`/new_ticket`**
+- **`/log_time`**
+
+Only the user who started the action can press the buttons. **Cancel** or timeout means **nothing was written**. Read-only commands (`/summary`, `/ask_issue`, listings, memory) do not ask for Confirm.
 
 ## Whitelist vs bot admins
 

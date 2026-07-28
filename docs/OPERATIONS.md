@@ -34,7 +34,7 @@ Implemented in [`ultron/settings.py`](../ultron/settings.py):
 Paths:
 
 - **`CONFIG_PATH`** — YAML file (default `./config.yaml` relative to the process working directory); bootstrap only, not remapped by `environment_bindings`.
-- **`ULTRON_STATE_DIR`** — Whitelist, admins, pending tokens (`whitelist.json`, `admins.json`, etc.), and **per-user durable memory** under `user_memory/user_<discord_id>.json`; default env name is overridable via `environment_bindings.ultron_state_dir_env`. Memory growth checks free disk space before expanding.
+- **`ULTRON_STATE_DIR`** — Whitelist, admins, pending tokens (`whitelist.json`, `admins.json`, etc.), and **per-user durable memory** under `user_memory/user_<discord_id>.json`; default env name is overridable via `environment_bindings.ultron_state_dir_env`. Memory growth checks free disk space before expanding. Writes that look like secrets (API keys, `Bearer` tokens, private key PEM blocks) are **hard-rejected**. Prompt injection wrappers (markdown fences / role prefixes) are stripped before store and again at prompt injection. Shrink/`/forget` still works when free space is below the floor. Discord **`/status`** reports a non-secret **`user_memory: ready (N files)`** count (no entry contents).
 
 ## Redmine
 
@@ -45,6 +45,7 @@ Paths:
 
 - **Slash commands** need **guilds**. **@mention** handling uses **guild_messages** + **dm_messages** (non-privileged) so `on_message` runs. The optional **`DISCORD_MESSAGE_CONTENT_INTENT=1`** adds the privileged **message_content** intent (must match the Developer Portal); enable it if Discord does not populate `mentions` without it.
 - Logs: slash traffic is tagged **`source=slash`** (`ultron.commands`); chat mentions use **`source=chat`** (`ultron.chat`). The console formatter prints a colored **`[phase]`** prefix immediately after the level (from `extra.slash_phase` or `extra.chat_phase`): slash **`INPUT`** / **`OUTPUT`** / **`ERROR`** / **`DENIED`**; chat **`RECEIVED`**, **`INPUT`**, **`OUTPUT`**, **`ERROR`**, **`IGNORE`**, and **`ROUTER`** (NL pipeline: classified, command_accepted, dispatch). The message body then carries `source=…`, ids, and **`feature=`** where relevant. **Admin** commands are never executed from chat (code-enforced).
+- **NL fast-path** — Obvious @mention intents (`summarize #N`, `ping`/`help`/`status`, remember/forget/show memory) are handled in code before the LLM router (`ultron/nl_fastpath.py`). Hits log as **`nl_fastpath`** with phase **`ROUTER`** (grep: `nl_fastpath`). Ambiguous or negated phrasing falls through to Gemma. Compound / Amvara-only messages never reach the fast-path: the prefilter routes them earlier in `_handle_nl_chat_message`.
 - **`DISCORD_GUILD_ID`** — On startup, Ultron **syncs slash commands to this guild** (instant updates for members in that server), then **syncs globally** so the same definitions apply in DMs and other guilds (Discord may take up to ~1 hour for the global side). If **unset or empty**, the default guild id is **788074756044750891**. Set **`0`** or **`global`** for **global-only** sync (no guild-specific copy). If **`/summary`** (or similar) still shows only **`issue_id`**, confirm you are testing **inside the configured guild** and check startup logs for `Registered LLM slash command variant` and sync lines; optional LLM parameters are easy to miss in the client UI (scroll the slash form).
 - **`DISCORD_ADMIN_IDS`** — Merged with `admins.json` under `ULTRON_STATE_DIR` for admin slash commands: `/approve`, `/remove`, `/show_config`, `/pi`, and `/upgrade` (see [Self-upgrade, self-repair, and feedback](#self-upgrade-self-repair-and-feedback) below for `/pi` and `/upgrade`).
 
@@ -166,7 +167,7 @@ Agent logs: **`data/self-upgrade/`** under **`ULTRON_STATE_DIR`**.
 ## Health checks
 
 - **Startup:** Log lines include Redmine OK / LLM backend (or none). Optional line to `registration_log` when enabled.
-- **Smoke script (no Discord):** [`scripts/smoke_check.py`](../scripts/smoke_check.py) — optional Redmine/LLM connectivity from `.env`.
+- **Smoke script (no Discord):** [`scripts/smoke_check.py`](../scripts/smoke_check.py) — optional Redmine/LLM connectivity from `.env`. Unwraps the cursor-agent LLM fallback wrapper (same as `ultron doctor`) so the chain primary is pinged.
 
 ## Autoagents loop (optional)
 

@@ -38,8 +38,39 @@ The same class of bug likely affects **`/note`** / NL `note`: `NOTE_SYSTEM` in `
 
 ## Acceptance criteria
 
-- [ ] Self-upgrade Redmine note contains no Markdown fences or `**`; uses Textile/`<pre>` for logs
-- [ ] `/note` LLM prompt + author prefix documented as Textile-oriented; tests cover helper
-- [ ] All `add_note` writers reviewed (list them in Implementation notes)
-- [ ] `.venv/bin/pytest -q` for new/changed tests PASS
-- [ ] Manual: trigger a dry note or inspect last `/upgrade` note format on Redmine (or unit-equivalent) — journals readable as Textile in the UI
+- [x] Self-upgrade Redmine note contains no Markdown fences or `**`; uses Textile/`<pre>` for logs
+- [x] `/note` LLM prompt + author prefix documented as Textile-oriented; tests cover helper
+- [x] All `add_note` writers reviewed (list them in Implementation notes)
+- [x] `.venv/bin/pytest -q` for new/changed tests PASS
+- [x] Manual: trigger a dry note or inspect last `/upgrade` note format on Redmine (or unit-equivalent) — journals readable as Textile in the UI
+
+## Implementation notes
+
+- Added `ultron/redmine_textile.py`: `textile_strong` / `textile_em` / `textile_code` / `textile_pre` / `textile_labeled` / `textile_bullet_list`, plus `scrub_markdown_to_textile` safety net and `has_markdown_artifacts`.
+- `_outcome_redmine_notes` no longer strips Discord Markdown from `_format_outcome_report`; it builds a Textile body from structured `SelfUpgradeOutcome` fields. Shot tails go in `<pre>`; `**` / ``` markers are neutralized in log text. Discord `FeedbackReport` path unchanged (still Markdown).
+- `NOTE_SYSTEM` requires Textile-only markup; `polish_note_text` runs `scrub_markdown_to_textile` on LLM output. Author prefix kept as Textile emphasis `_Note written by … from Discord_`.
+- Version bump **3.0.3 → 3.0.4**.
+
+### `add_note` writers reviewed
+
+| Site | Path | Change |
+|------|------|--------|
+| Self-upgrade / self-repair | `ultron/self_upgrade.py` → `_report_to_redmine` → `_outcome_redmine_notes` | Textile from fields |
+| Slash `/note` (after confirm) | `ultron/bot.py` | Uses polished body (Textile prompt + scrub) |
+| NL `note` (after confirm) | `ultron/bot.py` | Same via `add_formatted_note(..., skip_post=True)` |
+| Direct workflow post | `ultron/workflows.py` → `add_formatted_note` | Same polish + scrub |
+
+## Testing instructions
+
+```bash
+cd /root/Repos/ultron-redmine
+.venv/bin/pip install -q -e .
+.venv/bin/pytest -q tests/test_redmine_textile.py tests/test_self_upgrade.py
+```
+
+Expected: all tests PASS (including Textile helper, scrub, and `_outcome_redmine_notes` snapshots with no `**` / ```).
+
+### Manual / live (optional)
+
+1. After dump/restart: post a short `/note` on a test issue, Confirm → open Redmine journal; expect Textile-friendly body (no literal `**` / fences from polish).
+2. Or inspect unit-built note via pytest above; optional: next `/upgrade` note on #7406 should use `*Label:*` and `<pre>` for shot log.

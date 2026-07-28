@@ -21,6 +21,13 @@ from discord import app_commands
 from ultron.config import AppConfig
 from ultron.feedback import FeedbackReport, send_feedback
 from ultron.redmine import RedmineClient, RedmineError
+from ultron.redmine_textile import (
+    textile_bullet_list,
+    textile_code,
+    textile_labeled,
+    textile_pre,
+    textile_strong,
+)
 from ultron.sanitize import sanitize_for_discord
 from ultron.settings import EnvSettings
 
@@ -36,6 +43,7 @@ _COMPILE_MODULES = (
     "ultron/settings.py",
     "ultron/cursor_agent.py",
     "ultron/self_upgrade.py",
+    "ultron/redmine_textile.py",
     "ultron/feedback.py",
     "ultron/sanitize.py",
     "ultron/discord_slash.py",
@@ -510,17 +518,137 @@ def _format_outcome_report(
     return FeedbackReport(title=title, body="\n\n".join(sections), kind=kind)
 
 
+def _shot_log_tail_for_redmine(
+    shot: AutoagentsShotResult,
+    *,
+    secret_literals: list[str] | None,
+    max_chars: int = 3000,
+) -> str:
+    """Plain shot stdout/stderr tail for a Textile <pre> block (no Markdown)."""
+    body = (shot.stdout or "").strip()
+    if not body and shot.stderr.strip():
+        body = shot.stderr.strip()
+    if not body:
+        body = f"autoagents shot finished with exit code {shot.exit_code} and no output."
+    if len(body) > max_chars:
+        body = "…\n" + body[-max_chars:]
+    if not shot.ok:
+        err = shot.stderr.strip()
+        if err and err not in body:
+            body = f"{body}\n\nstderr:\n{err[:1500]}"
+    # Neutralize Markdown markers so journals never look like MD source
+    # (acceptance: no ``` / ** in Redmine notes, even inside <pre>).
+    body = body.replace("```", "").replace("**", "")
+    return sanitize_for_discord(body, secret_literals=secret_literals)
+
+
 def _outcome_redmine_notes(
     outcome: SelfUpgradeOutcome,
     *,
     secret_literals: list[str] | None,
 ) -> str:
-    """Plain-text journal note for Redmine (no Discord markdown overload)."""
-    report = _format_outcome_report(outcome, secret_literals=secret_literals)
-    text = f"{report.title}\n\n{report.body}"
-    # Redmine journals: keep readable; strip some Discord-only markers lightly.
-    text = text.replace("**", "")
-    return sanitize_for_discord(text, secret_literals=secret_literals)[:12000]
+    """Textile journal note for Redmine (built from fields; not Discord Markdown)."""
+
+    def _s(text: str) -> str:
+        return sanitize_for_discord(text, secret_literals=secret_literals)
+
+    t = outcome.trigger
+    if t.mode == SelfUpgradeMode.AUTO_REPAIR:
+        title = "Ultron self-repair report"
+        sections: list[str] = [
+            textile_labeled(
+                "Why:",
+                "Runtime code error triggered automatic self-repair.",
+            ),
+            textile_labeled(
+                "Trigger:",
+                f"{textile_code(t.error_type or 'n/a')} — {_s(t.error_message or 'n/a')}",
+            ),
+        ]
+        if t.command:
+            sections.append(
+                textile_labeled("Command:", textile_code(f"/{t.command}"))
+            )
+    else:
+        title = "Ultron self-upgrade report"
+        sections = [
+            textile_labeled(
+                "Why:",
+                "Admin-requested self-upgrade (/upgrade via autoagents).",
+            ),
+        ]
+
+    if outcome.task_path is not None:
+        sections.append(
+            textile_labeled("FEAT task:", textile_code(outcome.task_path.name))
+        )
+
+    if outcome.shot_result is not None:
+        r = outcome.shot_result
+        sections.append(
+            textile_labeled(
+                "Autoagents shot:",
+                f"{textile_code(r.session_id)} · {r.duration_seconds:.0f}s · exit {r.exit_code}",
+            )
+        )
+        summary = _shot_log_tail_for_redmine(r, secret_literals=secret_literals)
+        if summary:
+            sections.append(
+                f"{textile_strong('Shot log (tail):')}\n{textile_pre(summary)}"
+            )
+
+    if outcome.verify_steps:
+        status = "passed" if outcome.verify_ok else "failed"
+        cleaned = [
+            _s(s).replace("**", "").replace("```", "") for s in outcome.verify_steps
+        ]
+        sections.append(
+            f"{textile_strong(f'Verification ({status}):')}\n"
+            + textile_bullet_list(cleaned)
+        )
+
+    if outcome.dump_ok is True:
+        sections.append(
+            textile_labeled(
+                "Dump:",
+                f"{textile_code('scripts/ultron-dump.sh')} completed (pip/npm).",
+            )
+        )
+    elif outcome.dump_ok is False:
+        sections.append(
+            textile_labeled(
+                "Dump:",
+                f"{textile_code('scripts/ultron-dump.sh')} failed — see verification / host logs.",
+            )
+        )
+
+    if outcome.redmine_issue_id is not None:
+        note_status = "posted" if outcome.redmine_note_ok else "failed to post"
+        sections.append(
+            textile_labeled(
+                "Redmine:",
+                f"issue #{outcome.redmine_issue_id} note {note_status}.",
+            )
+        )
+
+    if outcome.restarted:
+        sections.append(
+            textile_labeled(
+                "Restart:",
+                "systemd will restart Ultron (systemctl restart --no-block); "
+                "expect a brief disconnect (~10–30 seconds).",
+            )
+        )
+    elif outcome.failure_reason:
+        sections.append(
+            textile_labeled("Status:", _s(outcome.failure_reason))
+        )
+
+    if outcome.user_action:
+        sections.append(textile_labeled("Action required:", outcome.user_action))
+
+    text = f"{title}\n\n" + "\n\n".join(sections)
+    return _s(text)[:12000]
 
 
 async def _report_to_redmine(

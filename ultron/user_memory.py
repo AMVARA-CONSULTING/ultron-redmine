@@ -33,6 +33,26 @@ _MIN_FREE_BYTES = 100 * 1024 * 1024
 # Extra headroom required beyond the projected write size.
 _WRITE_HEADROOM_BYTES = 1 * 1024 * 1024
 
+# High-confidence secret shapes — hard-reject on /remember (no soft-store).
+_SECRET_PATTERNS: tuple[re.Pattern[str], ...] = (
+    re.compile(r"-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----"),
+    re.compile(r"\bBearer\s+[A-Za-z0-9._\-+/=]{20,}", re.IGNORECASE),
+    re.compile(r"\bsk-[A-Za-z0-9]{20,}"),
+    re.compile(r"\bxox[baprs]-[A-Za-z0-9-]{10,}", re.IGNORECASE),
+    re.compile(
+        r"(?i)\b(api[_-]?key|access[_-]?token|secret[_-]?key|redmine_api_key)"
+        r"\s*[:=]\s*\S{12,}"
+    ),
+    re.compile(r"(?i)\bdiscord[_-]?(bot[_-]?)?token\s*[:=]\s*\S{20,}"),
+)
+
+# Strip common prompt-injection wrappers from stored / injected content.
+_FENCE_RE = re.compile(r"```(?:[\w+-]*)\s*\n?(.*?)```", re.DOTALL)
+_ROLE_PREFIX_RE = re.compile(
+    r"(?im)^\s*(system|assistant|developer|ignore(?:\s+all)?(?:\s+previous)?"
+    r"(?:\s+instructions)?)\s*:\s*"
+)
+
 
 class MemoryError(Exception):
     """Base error for user memory operations."""
@@ -51,8 +71,36 @@ def _utc_now() -> str:
 
 
 def _safe_owner(owner_id: int | str) -> str:
-    text = re.sub(r"[^0-9a-zA-Z._-]+", "_", str(owner_id).strip())
+    """Sanitize owner id for filenames (no path separators / traversal).
+
+    Dots are stripped so values like ``../escape`` cannot leave ``..`` in the
+    filename; Discord snowflakes are digits-only and unaffected.
+    """
+    text = re.sub(r"[^0-9a-zA-Z_-]+", "_", str(owner_id).strip())
+    text = re.sub(r"_+", "_", text).strip("._-")
     return (text[:64] or "unknown").lower()
+
+
+def looks_like_secret(content: str) -> bool:
+    """Return True when content matches a high-confidence secret pattern."""
+    text = content or ""
+    return any(pat.search(text) for pat in _SECRET_PATTERNS)
+
+
+def sanitize_memory_text(content: str) -> str:
+    """Strip markdown fences and role-play prefixes (prompt-injection hygiene)."""
+    text = (content or "").strip()
+    if not text:
+        return ""
+
+    def _unfence(match: re.Match[str]) -> str:
+        return (match.group(1) or "").strip()
+
+    text = _FENCE_RE.sub(_unfence, text)
+    text = _ROLE_PREFIX_RE.sub("", text)
+    # Collapse leftover fence markers without a closing pair.
+    text = text.replace("```", "")
+    return "\n".join(line.rstrip() for line in text.splitlines()).strip()
 
 
 def validate_memory_key(key: str) -> str:
@@ -75,17 +123,25 @@ def validate_memory_key(key: str) -> str:
 
 
 def validate_memory_content(content: str) -> str:
-    """Normalize content and enforce length.
+    """Normalize content, strip injection wrappers, enforce length and secrets.
+
+    Secrets are **hard-rejected** (not stored with a warning) so durable memory
+    cannot become a quiet dump for API keys or private key material.
 
     Raises:
-        MemoryValidationError: empty or too long.
+        MemoryValidationError: empty, too long, or looks like a secret.
     """
-    cleaned = (content or "").strip()
+    cleaned = sanitize_memory_text(content)
     if not cleaned:
         raise MemoryValidationError("Memory content must not be empty.")
     if len(cleaned) > _MAX_CONTENT_LEN:
         raise MemoryValidationError(
             f"Memory content too long (max {_MAX_CONTENT_LEN} chars)."
+        )
+    if looks_like_secret(cleaned):
+        raise MemoryValidationError(
+            "Memory content looks like a secret (API key, token, or private key). "
+            "Do not store credentials in durable memory."
         )
     return cleaned
 
@@ -123,7 +179,14 @@ class UserMemoryStore:
         logger.info("User memory store ready at %s", self.root.resolve())
 
     def _path(self, owner_id: int | str) -> Path:
-        return self.root / f"user_{_safe_owner(owner_id)}.json"
+        """Resolve the per-user JSON path; refuse escape outside ``self.root``."""
+        candidate = (self.root / f"user_{_safe_owner(owner_id)}.json").resolve()
+        root = self.root.resolve()
+        try:
+            candidate.relative_to(root)
+        except ValueError as exc:
+            raise MemoryValidationError("Invalid memory owner id.") from exc
+        return candidate
 
     def _empty_doc(self, owner_id: int | str) -> dict[str, Any]:
         return {
@@ -157,6 +220,21 @@ class UserMemoryStore:
         self.root.mkdir(parents=True, exist_ok=True)
         usage = shutil.disk_usage(self.root)
         return int(usage.free)
+
+    def count_user_files(self) -> int:
+        """Count per-user JSON files under the store (no content read)."""
+        if not self.root.is_dir():
+            return 0
+        return sum(
+            1
+            for p in self.root.iterdir()
+            if p.is_file() and p.name.startswith("user_") and p.suffix == ".json"
+        )
+
+    def status_line(self) -> str:
+        """Non-secret one-liner for ``/status`` (file count only)."""
+        n = self.count_user_files()
+        return f"• **user_memory:** ready ({n} files)"
 
     def assert_can_grow(self, *, current_bytes: int, new_bytes: int) -> None:
         """Refuse growth when free disk is low or the file would exceed the cap.
@@ -213,12 +291,19 @@ class UserMemoryStore:
         *,
         max_chars: int = _MAX_PROMPT_CHARS,
     ) -> str:
-        """Compact standing notes for LLM system/user injection (content only)."""
+        """Compact standing notes for LLM system/user injection (content only).
+
+        Re-sanitizes stored text and skips entries that look like secrets so
+        older files cannot inject credentials or role-play wrappers into prompts.
+        """
         entries = self.list_entries(owner_id)
         if not entries:
             return ""
         lines = ["Standing user prefs (MUST follow when relevant):"]
-        for key, content in sorted(entries.items()):
+        for key, raw in sorted(entries.items()):
+            content = sanitize_memory_text(raw)
+            if not content or looks_like_secret(content):
+                continue
             if "\n" in content:
                 first, *rest = content.splitlines()
                 lines.append(f"- [{key}] {first.strip()}")
@@ -228,6 +313,8 @@ class UserMemoryStore:
                         lines.append(f"  {part}")
             else:
                 lines.append(f"- [{key}] {content}")
+        if len(lines) == 1:
+            return ""
         text = "\n".join(lines)
         if len(text) > max_chars:
             text = text[: max_chars - 40] + "\n…(memory truncated for prompt)"

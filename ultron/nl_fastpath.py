@@ -5,7 +5,9 @@ Why: Gemma-class models are slow and unreliable for obvious intents
 tokens and latency; the LLM router remains the fallback.
 
 How used: ``UltronBot._handle_nl_chat_message`` / redmine router calls
-``try_nl_fastpath`` before ``run_nl_router``.
+``try_nl_fastpath`` before ``run_nl_router``. Compound/Amvara intents are
+classified by the prefilter *before* the redmine router, so this module never
+sees those messages.
 """
 
 from __future__ import annotations
@@ -22,11 +24,18 @@ _EXACT_CMD = re.compile(
     re.IGNORECASE,
 )
 
+# Polite / request prefixes before a summary verb (high-confidence only).
+_SUMMARY_PREFIX = (
+    r"(?:(?:please|por\s+favor|can\s+you|could\s+you|would\s+you|"
+    r"me\s+puedes|podr[ií]as?|dame|haz(?:me)?|quiero)\s+)?"
+    r"(?:(?:un|una|a|el|la|the)\s+)?"
+)
+
 # summarize / resume ticket #N  OR  resumen del ticket 123
 _SUMMARY_RE = re.compile(
-    r"^\s*(?:(?:please|por\s+favor)\s+)?"
+    rf"^\s*{_SUMMARY_PREFIX}"
     r"(?:summar(?:y|ize|ise)|resum(?:e|en|ir)|sumariz(?:a|ar))"
-    r"(?:\s+(?:of|del|de|the|el|la|este|esta))?"
+    r"(?:\s+(?:of|del|de|the|el|la|este|esta|for|para))?"
     r"(?:\s+(?:ticket|issue|incidente|tarea))?"
     r"\s*#?\s*(\d{1,9})\s*[.!?]*\s*$",
     re.IGNORECASE,
@@ -47,6 +56,14 @@ _ASK_RE = re.compile(
     re.IGNORECASE | re.DOTALL,
 )
 
+# Nostalgia / storytelling — must NOT become durable memory writes.
+_REMEMBER_NOSTALGIA_RE = re.compile(
+    r"^\s*(?:remember|recuerda(?:\s+que)?|memoriza|te\s+acuerdas)\s+"
+    r"(?:when|the\s+time|how\s+we|that\s+time|"
+    r"cuando|aquella?\s+vez|el\s+d[ií]a)\b",
+    re.IGNORECASE,
+)
+
 # remember key: value  /  recuerda que …
 _REMEMBER_KEY_RE = re.compile(
     r"^\s*(?:remember|recuerda(?:\s+que)?|memoriza)\s+"
@@ -65,14 +82,27 @@ _FORGET_ALL_RE = re.compile(
     re.IGNORECASE,
 )
 _FORGET_KEY_RE = re.compile(
-    r"^\s*(?:forget|olvida(?:r)?)\s+(?:key\s+)?([a-zA-Z][a-zA-Z0-9_.-]{0,63})\s*$",
+    r"^\s*(?:forget|olvida(?:r)?)\s+(?:key\s+|la\s+clave\s+)?"
+    r"([a-zA-Z][a-zA-Z0-9_.-]{0,63})\s*$",
     re.IGNORECASE,
 )
 
-# show memory
+# show memory / muestra la memoria (allow accented muéstrame)
 _SHOW_MEMORY_RE = re.compile(
-    r"^\s*(?:(?:show|list|ver|muestra(?:me)?)\s+)?(?:my\s+)?memory\b|"
+    r"^\s*(?:(?:show|list|ver|mu[eé]stra(?:me)?)\s+(?:(?:la|el|mi|my|the)\s+)?)?"
+    r"(?:my\s+)?(?:memory|memoria)\b|"
     r"^\s*(?:qu[eé]\s+recuerdas|what\s+do\s+you\s+remember)\s*$",
+    re.IGNORECASE,
+)
+
+# Negation near a summary request → fall through to LLM (prefer miss over wrong cmd).
+_SUMMARY_NEGATION_RE = re.compile(
+    r"\b(?:not|n't|no|nunca|never|dont|don't|ignore|without|sin)\b",
+    re.IGNORECASE,
+)
+
+_SUMMARY_VERB_RE = re.compile(
+    r"\b(?:summar(?:y|ize|ise)|resum(?:e|en|ir)|sumariz)",
     re.IGNORECASE,
 )
 
@@ -110,18 +140,22 @@ def _slug_key_from_text(text: str) -> str:
     return base[:64] or "note"
 
 
+def _strip_reply_context(user_text: str) -> str:
+    """Keep only the user half after a replied-to excerpt separator."""
+    ut = (user_text or "").strip()
+    if "\n\n---\n\n" in ut:
+        return ut.split("\n\n---\n\n", 1)[-1].strip()
+    return ut
+
+
 def try_nl_fastpath(user_text: str) -> NLFastpathOutcome | None:
     """Return a deterministic outcome when the intent is obvious; else None.
 
     Does not call the LLM. Callers should fall back to ``run_nl_router``.
     """
-    ut = (user_text or "").strip()
+    ut = _strip_reply_context(user_text)
     if not ut:
         return None
-
-    # Drop a leading replied-to block if present (--- separator from reply context).
-    if "\n\n---\n\n" in ut:
-        ut = ut.split("\n\n---\n\n", 1)[-1].strip()
 
     m = _EXACT_CMD.match(ut)
     if m:
@@ -140,6 +174,10 @@ def try_nl_fastpath(user_text: str) -> NLFastpathOutcome | None:
     m = _FORGET_KEY_RE.match(ut)
     if m:
         return NLMemoryClear(key=m.group(1), clear_all=False)
+
+    # Nostalgia / storytelling must not become memory writes.
+    if _REMEMBER_NOSTALGIA_RE.match(ut):
+        return None
 
     m = _REMEMBER_KEY_RE.match(ut)
     if m:
@@ -165,14 +203,15 @@ def try_nl_fastpath(user_text: str) -> NLFastpathOutcome | None:
     if m:
         return NLInvoke(command="summary", args={"issue_id": int(m.group(1))})
 
-    # Single issue id + clear summary verb somewhere (short messages only).
+    # Single issue id + clear summary verb (short messages only).
+    # Skip when negation is present — prefer LLM over a wrong summary invoke.
     ids = extract_issue_ids(ut)
-    if len(ids) == 1 and len(ut) <= 80:
-        if re.search(
-            r"\b(summar(?:y|ize|ise)|resum(?:e|en|ir)|sumariz)",
-            ut,
-            re.IGNORECASE,
-        ):
-            return NLInvoke(command="summary", args={"issue_id": ids[0]})
+    if (
+        len(ids) == 1
+        and len(ut) <= 80
+        and _SUMMARY_VERB_RE.search(ut)
+        and not _SUMMARY_NEGATION_RE.search(ut)
+    ):
+        return NLInvoke(command="summary", args={"issue_id": ids[0]})
 
     return None

@@ -1,3 +1,4 @@
 # UTC review stamps (one block per run). Managed by agent 008.
 
 2026-07-18T14:03:26Z tasks=3 signals=weekly_due=1 doc_drift=0 task_backlog=0 pytest=skipped(readonly) summary=USER_GUIDE status/commands; NL time_summary parity; README llm + bak hygiene
+2026-07-28T22:36:30Z tasks=3 signals=weekly_due=1 doc_drift=0 task_backlog=0 test_signals=0 pytest=skipped(readonly) summary=smoke_check cursor-fallback unwrap; RELEASE_CHECKLIST 3.x; doctor user_memory health (skipped 6 open Ultron-3.0 FEAT-0s)

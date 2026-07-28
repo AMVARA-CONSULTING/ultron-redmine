@@ -134,6 +134,8 @@ from ultron.write_confirm import (
     ConfirmResult,
     WriteConfirmView,
     ask_write_confirm,
+    format_issue_confirm_heading,
+    format_write_abort_message,
     format_write_confirm_prompt,
 )
 
@@ -291,8 +293,12 @@ def _format_status_message(
         nl_line,
         reports_line,
         f"• **Report timezone:** `{tz}`",
-        "",
     ]
+    um = getattr(bot, "user_memory", None)
+    um_line = getattr(um, "status_line", None) if um is not None else None
+    if callable(um_line):
+        lines.append(um_line())
+    lines.append("")
     rw_stats = getattr(bot, "redmine_write_stats_status_line", None)
     if callable(rw_stats):
         rw_s = rw_stats()
@@ -367,7 +373,7 @@ _HELP_TEXT = (
 
 **Whitelisted users**
 • `/ping` — Quick check; replies are public in servers. Non-whitelisted users are denied like for other gated commands.
-• `/status` — Summary: version, uptime, latency, Redmine host, LLM, NL routing, scheduled reports.
+• `/status` — Summary: version, uptime, latency, Redmine host, LLM, NL routing, durable memory file count, scheduled reports.
 • `/rpsls` `move` — Rock–paper–scissors–lizard–Spock vs the bot.
 • `/list_new_issues` — Issues in the configured “new” status past the minimum age (see `discord.new_issues`).
 • `/issues_by_status` `status` — Same style of list for a Redmine status name (limits from `discord.new_issues`).
@@ -382,14 +388,16 @@ _HELP_TEXT = (
 • `/note` `issue_id` `text` [`llm_provider`] [`llm_model`] — Append an LLM-polished note (requires LLM). **Confirm** before posting.
 • `/ol` `text` [`llm_provider`] [`llm_model`] — Ask the configured local model (Ollama when present in **llm_chain**) for technical or general advice. Advisory only — no shell or file access.
 • `/remember` `key` `content` — Save a durable personal note (project prefs, language, habits). Injected into NL/summary prompts. Growth checks free disk first.
-• `/forget` [`key`] — Delete one memory key, or omit key and set clear_all to wipe all.
+• `/forget` [`key`] [`clear_all`] — Delete one memory key, or set **clear_all** to wipe all of yours.
 • `/memory` — List your durable memory entries.
 • `/audit` `host` `text` — Run an **Amvara server audit** on an allowlisted host (pi, cursor-agent fallback). SSH diagnostics via agents on the Ultron host.
 • `/ca` `host` `text` — Same as `/audit` but **cursor-agent only** (no pi fallback).
 
-**@mention** or **reply**: whitelisted only. `discord.nl_commands` / `ULTRON_NL_COMMANDS` enables LLM routing into allowed commands (including Amvara audits and compound Redmine tasks).
+Writes that change Redmine (**`/new_ticket`**, **`/log_time`**, **`/note`**, and the same via @mention) always ask for **Confirm / Cancel** first.
 
-Without **llm_chain**, `/summary`, `/ask_issue`, `/note`, and `/ol` are unavailable; listings (including `/find_issue`, `/top_tickets`), `/new_ticket`, `/ping`, `/rpsls`, and `/token` still work.
+**@mention** or **reply**: whitelisted only. Obvious intents (e.g. summarize #N, remember, ping/help/status) use a code **fast-path** (no LLM). Otherwise `discord.nl_commands` / `ULTRON_NL_COMMANDS` enables LLM routing into allowed commands (including Amvara audits and compound Redmine tasks).
+
+Without **llm_chain**, `/summary`, `/ask_issue`, `/note`, and `/ol` are unavailable; listings (including `/find_issue`, `/top_tickets`), `/new_ticket`, `/ping`, `/rpsls`, memory (`/remember`, `/forget`, `/memory`), and `/token` still work.
 
 **Bot admins only**
 • `/pi` `text` — Run **pi** with Ollama on the Ultron checkout (file/shell access in workspace). Requires `npm install` + Ollama in **llm_chain**.
@@ -1539,6 +1547,19 @@ class UltronBot(commands.Bot):
             logger.warning("user memory format failed user=%s: %s", user_id, exc)
             return ""
 
+    async def _issue_subject_for_confirm(self, issue_id: int) -> str:
+        """Best-effort short subject for write-confirm summaries (empty on failure)."""
+        try:
+            issue = await self.redmine.get_issue(int(issue_id), includes="")
+            return str(issue.get("subject", "") or "")
+        except Exception as exc:
+            logger.info(
+                "write confirm: could not fetch subject for #%s: %s",
+                issue_id,
+                exc,
+            )
+            return ""
+
     async def _confirm_redmine_write(
         self,
         *,
@@ -1546,19 +1567,21 @@ class UltronBot(commands.Bot):
         channel: discord.abc.Messageable,
         summary: str,
         status_message: discord.Message | None = None,
-    ) -> bool:
-        """Ask Confirm/Cancel; return True only on APPROVE."""
+        abort_nothing_written: str,
+    ) -> ConfirmResult:
+        """Ask Confirm/Cancel; return the outcome (only APPROVE proceeds to write)."""
         result = await ask_write_confirm(
             channel=channel,
             author_id=author_id,
             summary=summary,
             edit_message=status_message,
+            abort_nothing_written=abort_nothing_written,
         )
-        if result == ConfirmResult.APPROVE:
-            return True
         if result == ConfirmResult.TIMEOUT:
             logger.info("write confirm timeout user=%s", author_id)
-        return False
+        elif result == ConfirmResult.CANCEL:
+            logger.info("write confirm cancelled user=%s", author_id)
+        return result
 
     async def _confirm_slash_redmine_write(
         self,
@@ -1566,7 +1589,8 @@ class UltronBot(commands.Bot):
         *,
         summary: str,
         ephemeral: bool,
-    ) -> bool:
+        abort_nothing_written: str,
+    ) -> ConfirmResult:
         """Confirm via followup message (after defer or initial response)."""
         view = WriteConfirmView(author_id=interaction.user.id)
         content = format_write_confirm_prompt(summary)
@@ -1576,17 +1600,25 @@ class UltronBot(commands.Bot):
             )
         except discord.HTTPException as exc:
             logger.warning("slash write confirm prompt failed: %s", exc)
-            return False
+            return ConfirmResult.CANCEL
         result = await view.wait_result()
         try:
-            await msg.edit(view=None)
+            if result != ConfirmResult.APPROVE:
+                await msg.edit(
+                    content=format_write_abort_message(
+                        result, nothing_written=abort_nothing_written
+                    ),
+                    view=None,
+                )
+            else:
+                await msg.edit(view=None)
         except discord.HTTPException:
             pass
-        if result == ConfirmResult.APPROVE:
-            return True
         if result == ConfirmResult.TIMEOUT:
             logger.info("slash write confirm timeout user=%s", interaction.user.id)
-        return False
+        elif result == ConfirmResult.CANCEL:
+            logger.info("slash write confirm cancelled user=%s", interaction.user.id)
+        return result
 
     def _format_memory_list(self, user_id: int) -> str:
         """Discord markdown listing of durable memory entries."""
@@ -2604,7 +2636,7 @@ class UltronBot(commands.Bot):
                 project = str(args["project"])
                 title = str(args["title"])
                 description = str(args["description"])
-                ok = await self._confirm_redmine_write(
+                confirm = await self._confirm_redmine_write(
                     author_id=message.author.id,
                     channel=message.channel,
                     summary=(
@@ -2614,11 +2646,9 @@ class UltronBot(commands.Bot):
                         + ("…" if len(description) > 400 else "")
                     ),
                     status_message=status_message,
+                    abort_nothing_written="no ticket created",
                 )
-                if not ok:
-                    await _nl_edit_or_reply(
-                        message, status_message, "Cancelled — no ticket created."
-                    )
+                if confirm != ConfirmResult.APPROVE:
                     return
                 body, err, _iid = await create_new_ticket(
                     redmine=self.redmine,
@@ -2636,16 +2666,18 @@ class UltronBot(commands.Bot):
             if cmd == "log_time":
                 issue_id = int(args["issue_id"])
                 hours = float(args["hours"])
-                ok = await self._confirm_redmine_write(
+                subject = await self._issue_subject_for_confirm(issue_id)
+                confirm = await self._confirm_redmine_write(
                     author_id=message.author.id,
                     channel=message.channel,
-                    summary=f"**Log time** **{hours:g}** h on issue **#{issue_id}**.",
+                    summary=(
+                        f"{format_issue_confirm_heading(action='Log time', issue_id=issue_id, subject=subject)}\n"
+                        f"**Hours:** **{hours:g}**"
+                    ),
                     status_message=status_message,
+                    abort_nothing_written="no time logged",
                 )
-                if not ok:
-                    await _nl_edit_or_reply(
-                        message, status_message, "Cancelled — no time logged."
-                    )
+                if confirm != ConfirmResult.APPROVE:
                     return
                 try:
                     activities = await self.redmine.list_time_entry_activities()
@@ -2798,19 +2830,18 @@ class UltronBot(commands.Bot):
                     skip_post=True,
                 )
                 excerpt = posted[:500] + ("…" if len(posted) > 500 else "")
-                ok = await self._confirm_redmine_write(
+                subject = await self._issue_subject_for_confirm(issue_id)
+                confirm = await self._confirm_redmine_write(
                     author_id=message.author.id,
                     channel=message.channel,
                     summary=(
-                        f"**Add note** to issue **#{issue_id}**\n\n"
+                        f"{format_issue_confirm_heading(action='Add note', issue_id=issue_id, subject=subject)}\n\n"
                         f"**Preview:**\n{excerpt}"
                     ),
                     status_message=status_message,
+                    abort_nothing_written="note was not posted",
                 )
-                if not ok:
-                    await _nl_edit_or_reply(
-                        message, status_message, "Cancelled — note was not posted."
-                    )
+                if confirm != ConfirmResult.APPROVE:
                     return
                 await self.redmine.add_note(issue_id, posted)
                 reply = f"Note added to [{issue_id}]({url}).\n\n**Preview:**\n{excerpt}"
@@ -3416,22 +3447,27 @@ class UltronBot(commands.Bot):
             )
             excerpt = formatted[:500] + ("…" if len(formatted) > 500 else "")
             status_msg = await interaction.original_response()
-            ok = await self._confirm_redmine_write(
+            subject = await self._issue_subject_for_confirm(issue_id)
+            confirm = await self._confirm_redmine_write(
                 author_id=interaction.user.id,
                 channel=interaction.channel,
                 summary=(
-                    f"**Add note** to issue **#{issue_id}**\n\n"
+                    f"{format_issue_confirm_heading(action='Add note', issue_id=issue_id, subject=subject)}\n\n"
                     f"**Preview:**\n{excerpt}"
                 ),
                 status_message=status_msg,
+                abort_nothing_written="note was not posted",
             )
-            if not ok:
-                await _edit_or_followup(
+            if confirm != ConfirmResult.APPROVE:
+                log_slash_output(
+                    "note",
                     interaction,
-                    "Cancelled — note was not posted.",
-                    ephemeral=ephemeral,
+                    action=(
+                        "timed out waiting for confirm"
+                        if confirm == ConfirmResult.TIMEOUT
+                        else "cancelled by user"
+                    ),
                 )
-                log_slash_output("note", interaction, action="cancelled by user")
                 return
             await self.redmine.add_note(issue_id, formatted)
             reply = f"Note added to [{issue_id}]({url}).\n\n**Preview:**\n{excerpt}"
@@ -4361,7 +4397,7 @@ class UltronBot(commands.Bot):
 
         @self.tree.command(
             name="status",
-            description="Bot health summary: version, uptime, Redmine, LLM, and feature flags",
+            description="Bot health: version, uptime, Redmine, LLM, NL routing, memory file count",
         )
         async def status_cmd(interaction: discord.Interaction) -> None:
             ephemeral = self.app_cfg.discord.ephemeral_default
@@ -4637,7 +4673,7 @@ class UltronBot(commands.Bot):
                 log_slash_output("new_ticket", interaction, action="missing required parameter")
                 return
             await interaction.response.defer(ephemeral=ephemeral, thinking=True)
-            ok = await self._confirm_slash_redmine_write(
+            confirm = await self._confirm_slash_redmine_write(
                 interaction,
                 summary=(
                     f"**Create issue** in project `{proj}`\n"
@@ -4646,12 +4682,18 @@ class UltronBot(commands.Bot):
                     + ("…" if len(desc) > 400 else "")
                 ),
                 ephemeral=ephemeral,
+                abort_nothing_written="no ticket created",
             )
-            if not ok:
-                await interaction.followup.send(
-                    "Cancelled — no ticket created.", ephemeral=ephemeral
+            if confirm != ConfirmResult.APPROVE:
+                log_slash_output(
+                    "new_ticket",
+                    interaction,
+                    action=(
+                        "timed out waiting for confirm"
+                        if confirm == ConfirmResult.TIMEOUT
+                        else "cancelled by user"
+                    ),
                 )
-                log_slash_output("new_ticket", interaction, action="cancelled by user")
                 return
             body, err, iid = await create_new_ticket(
                 redmine=self.redmine,
@@ -4794,16 +4836,28 @@ class UltronBot(commands.Bot):
                 ),
             )
             await interaction.response.defer(ephemeral=ephemeral, thinking=True)
-            ok = await self._confirm_slash_redmine_write(
+            subject = await self._issue_subject_for_confirm(int(issue_id))
+            confirm = await self._confirm_slash_redmine_write(
                 interaction,
-                summary=f"**Log time** **{float(hours):g}** h on issue **#{issue_id}**.",
+                summary=(
+                    f"{format_issue_confirm_heading(action='Log time', issue_id=int(issue_id), subject=subject)}\n"
+                    f"**Hours:** **{float(hours):g}**"
+                    + (f"\n**Comments:** {cmt[:200]}" if cmt else "")
+                    + (f"\n**spent_on:** `{spo}`" if spo else "")
+                ),
                 ephemeral=ephemeral,
+                abort_nothing_written="no time logged",
             )
-            if not ok:
-                await interaction.followup.send(
-                    "Cancelled — no time logged.", ephemeral=ephemeral
+            if confirm != ConfirmResult.APPROVE:
+                log_slash_output(
+                    "log_time",
+                    interaction,
+                    action=(
+                        "timed out waiting for confirm"
+                        if confirm == ConfirmResult.TIMEOUT
+                        else "cancelled by user"
+                    ),
                 )
-                log_slash_output("log_time", interaction, action="cancelled by user")
                 return
             try:
                 activities = await self.redmine.list_time_entry_activities()

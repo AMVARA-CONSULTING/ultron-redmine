@@ -90,8 +90,11 @@ class RedmineClient:
         return "(unknown)"
 
     async def get_issue(self, issue_id: int, includes: str = "journals,attachments,relations") -> dict[str, Any]:
+        params: dict[str, str] = {}
+        if includes:
+            params["include"] = includes
         async with self._client() as c:
-            r = await c.get(f"/issues/{issue_id}.json", params={"include": includes})
+            r = await c.get(f"/issues/{issue_id}.json", params=params or None)
         if r.status_code == 404:
             raise IssueNotFound(f"Issue #{issue_id} not found")
         if r.is_error:

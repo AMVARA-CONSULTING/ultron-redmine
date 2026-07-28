@@ -7,6 +7,7 @@ from ultron.llm import ChainSkipCallback, LLMBackend
 from ultron.llm_cursor_fallback import llm_chain_client
 from ultron.readlog import log_read_payload
 from ultron.redmine import IssueNotFound, RedmineClient
+from ultron.redmine_textile import scrub_markdown_to_textile
 from ultron.textutil import format_issue_for_summary, format_issue_metadata_header
 from ultron.workflow_log import wf_info
 
@@ -24,14 +25,18 @@ ASK_ABOUT_ISSUE_SYSTEM = (
 )
 
 NOTE_SYSTEM = (
-    "You write the body of one Redmine journal note as plain text. "
+    "You write the body of one Redmine journal note. "
     "Output ONLY that note text and nothing else (no preamble, no labels). "
     "Do not add a byline or a 'Note written by … from Discord' line; the application prepends that after generation. "
     "Never repeat or quote the issue subject/title, issue number, project name, or tracker unless the user explicitly asked for them in their message. "
     "If the user asks a direct question—including simple arithmetic—answer it inside the note. "
     "Preserve factual claims and names; improve clarity and professional tone. "
     "Do not invent information not implied by the user's text. "
-    "Use markdown only if the user already used it."
+    "Redmine journals render Textile, not Markdown. Use plain text plus Textile only: "
+    "strong *text*, emphasis _text_, inline code @code@, preformatted blocks as <pre>...</pre>, "
+    "lists with * or # at line start. "
+    "Do NOT use Markdown: no **bold**, no ``` fenced code blocks, no # ATX headings, "
+    "no Discord spoilers or mention markup."
 )
 
 logger = logging.getLogger(__name__)
@@ -195,10 +200,11 @@ async def ask_about_issue(
 
 
 def _note_body_with_author(*, author_label: str | None, formatted: str) -> str:
-    """Prefix italic attribution line before LLM body (Discord-style `_…_`)."""
+    """Prefix Textile emphasis attribution before LLM body for Redmine journals."""
     if not author_label or not author_label.strip():
         return formatted
     who = author_label.strip()
+    # Textile emphasis (_…_); same glyphs as Discord italics but intentional Textile.
     header = f"_Note written by {who} from Discord_"
     return f"{header}\n\n{formatted}"
 
@@ -251,7 +257,7 @@ async def polish_note_text(
     )
     if not formatted:
         raise RuntimeError("LLM returned an empty note")
-    return formatted
+    return scrub_markdown_to_textile(formatted)
 
 
 async def add_formatted_note(
