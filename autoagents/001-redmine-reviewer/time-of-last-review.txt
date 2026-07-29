@@ -59,3 +59,9 @@ FEAT created: 0 (Redmine) + 0 (GitHub) = 0
 NEW created: 0 (logs)
 Notes: Synced main. Redmine via .venv (preflight lacked httpx on system python) — Ultron-related open: umbrella #7406 already has FEAT-7406-20260729-1914-… from /upgrade (+ Redmine journal); smoke #7757/#7758 "safe to close" (not product work); #7407 Ollama host ops; issue_checker dry-run would queue non-Ultron MIF/CMDIP/DT Buses — skipped per Ultron-only preference. GH open issues []. Log hits in preflight digest: approve unknown-token INFO (expected deny / ERROR substring false-positive); LLM Ollama timeout/connection on 2026-07-20 is provider/ops with user-visible fail path — not standing code incidents (bot healthy; LLM OK today). Recent write-confirm timeouts covered by existing FEAT-7406 (skip note confirm) + UNTESTED write-confirm UX. No NEW-/FEAT- created.
 Preflight: G001_REDMINE_OK=0 G001_GH_OK=1 G001_GH_AUTH_FAILED=0 G001_UNTRACKED_REDMINE=0 G001_UNTRACKED_GH=0 G001_LOG_SIGNALS=1
+
+=== 2026-07-29T19:29:40Z ===
+FEAT created: 0 (Redmine) + 0 (GitHub) = 0
+NEW created: 0 (logs)
+Notes: Synced main. Redmine via .venv (preflight lacked httpx on system python) — Ultron-related open: umbrella #7406 already CLOSED-7406-20260729-1914 in done/ (skip-confirm note shipped v3.0.12); smoke #7757/#7758 "safe to close" (not product work); #7407 Ollama host ops; issue_checker dry-run would queue non-Ultron MIF/DT Buses (#7643/#7794/#7790) — skipped per Ultron-only preference. GH open issues []. Log hits in preflight digest: approve unknown-token INFO (expected deny / ERROR substring false-positive); LLM Ollama timeout/connection on 2026-07-20 is provider/ops with user-visible fail path — not standing code incidents. Bot healthy (v3.0.12); today's write-confirm timeout covered by UNTESTED-0-20260729-0033. No NEW-/FEAT- created.
+Preflight: G001_REDMINE_OK=0 G001_GH_OK=1 G001_GH_AUTH_FAILED=0 G001_UNTRACKED_REDMINE=0 G001_UNTRACKED_GH=0 G001_LOG_SIGNALS=1
