@@ -194,6 +194,11 @@ _SESSION_EXPIRED_HINT = (
 _DISCORD_MSG_MAX = 2000
 
 
+def watching_presence_name(version: str = _ULTRON_VERSION) -> str:
+    """Discord ``ActivityType.watching`` name (client shows ``Watching …``)."""
+    return f"Ultron v{version}"
+
+
 def _format_uptime_brief(start_utc: datetime) -> str:
     """Short uptime like ``2d 5h`` or ``<1 min`` for status text."""
     now = datetime.now(timezone.utc)
@@ -4311,6 +4316,26 @@ class UltronBot(commands.Bot):
             extra=_STARTUP_LOG_EXTRA,
         )
 
+    async def _set_watching_presence(self, *, log_extra: dict[str, Any] | None = None) -> None:
+        """Publish Discord Watching activity with the package version."""
+        name = watching_presence_name()
+        try:
+            await self.change_presence(
+                activity=discord.Activity(
+                    type=discord.ActivityType.watching,
+                    name=name,
+                ),
+                status=discord.Status.online,
+            )
+            logger.info("Discord presence set: Watching %s", name, extra=log_extra or {})
+        except discord.HTTPException as e:
+            logger.warning("change_presence failed: %s", e, extra=log_extra or {})
+
+    async def _refresh_watching_presence_soon(self) -> None:
+        """Re-apply Watching presence after connect (Discord may drop the first update)."""
+        await asyncio.sleep(3)
+        await self._set_watching_presence(log_extra=_STARTUP_LOG_EXTRA)
+
     async def setup_hook(self) -> None:
         guild = discord.Object(id=self.env.discord_guild_id) if self.env.discord_guild_id else None
 
@@ -5276,16 +5301,10 @@ class UltronBot(commands.Bot):
             _ULTRON_VERSION,
             extra=on_ready_ex,
         )
-        try:
-            await self.change_presence(
-                activity=discord.Activity(
-                    type=discord.ActivityType.watching,
-                    name=f"v{_ULTRON_VERSION}",
-                ),
-                status=discord.Status.online,
-            )
-        except discord.HTTPException as e:
-            logger.warning("change_presence failed: %s", e, extra=on_ready_ex)
+        await self._set_watching_presence(log_extra=on_ready_ex)
+        # Discord sometimes drops the first status update right after connect; re-apply once.
+        if first_ready:
+            asyncio.create_task(self._refresh_watching_presence_soon())
         if not self.env.llm_enabled:
             logger.info(
                 "No language model assigned — /summary, /ask_issue, and /note are disabled; "
