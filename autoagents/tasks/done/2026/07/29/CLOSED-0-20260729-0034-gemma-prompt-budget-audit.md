@@ -1,3 +1,13 @@
+---
+## Closing summary (TOP)
+
+- **What happened:** Audit of Gemma/local LLM prompt budgets for ticket truncation and user-memory injection after Ultron 3.0.
+- **What was done:** Named public constants for issue/memory caps (defaults unchanged), locked fat-ticket and memory ballpark tests, and documented budgets in OPERATIONS; smaller router model left as future option.
+- **What was tested:** `tests/test_textutil.py` + `tests/test_user_memory.py` — 25 passed; live `/summary` prompt_chars check optional/skipped.
+- **Why closed:** All acceptance criteria passed; defaults not increased; docs match code constants.
+- **Closed at (UTC):** 2026-07-29 19:48
+---
+
 # Audit Gemma prompt budgets (ticket truncate + memory injection)
 
 ## Tracker
@@ -62,3 +72,28 @@ Manual / operator:
 
 1. Open `docs/OPERATIONS.md` → section **Gemma / local LLM prompt budgets**; confirm table matches code constants.
 2. On a host with LLM logging: run `/summary` on a large ticket and grep logs for `prompt_chars=` on the summarize `FETCH` step — should stay near ≤ ~9.5k user chars with memory.
+
+## Test report
+
+- **Date/time (UTC):** 2026-07-29 19:46:24 – 19:46:39 UTC
+- **Environment:** branch `main` @ `aef4b61`, `.venv` Python 3.13.5 / pytest 9.1.1, package version 3.0.14
+
+### What was tested
+
+- Automated: `.venv/bin/pip install -q -e .` then `.venv/bin/pytest -q tests/test_textutil.py tests/test_user_memory.py` (25 tests).
+- Spot-check of budget-specific cases (`fat` / `budget` / `format_for_prompt`): 3 passed.
+- Manual/docs: `docs/OPERATIONS.md` section **Gemma / local LLM prompt budgets** vs named constants in `ultron/textutil.py` and `ultron/user_memory.py`.
+- Confirmed defaults unchanged: description 4000, journals 12×800, total 8000, memory 1200.
+
+### Results
+
+| Criterion | Result | Evidence |
+|-----------|--------|----------|
+| Documented prompt size limits in OPERATIONS | **PASS** | Section present; table matches `ISSUE_SUMMARY_MAX_*` and `MEMORY_PROMPT_MAX_CHARS` |
+| Tests lock truncation invariants | **PASS** | Fat-ticket / budget tests selected and green |
+| `pytest -q tests/test_textutil.py tests/test_user_memory.py` | **PASS** | `25 passed in 1.05s` |
+| No increase of default ticket dump sizes | **PASS** | Defaults still 4000 / 12 / 800 / 8000 / 1200 |
+
+### Overall: **PASS**
+
+Operator feedback: Truncation and memory injection budgets are locked by tests and correctly documented for Gemma. Live `/summary` `prompt_chars=` check on a fat ticket was not run here (optional); constants and unit ballparks already cover the intended ceiling.

@@ -1,3 +1,13 @@
+---
+## Closing summary (TOP)
+
+- **What happened:** Redmine journal notes were Markdown-ish; this instance expects Textile, so self-upgrade and `/note` journals rendered poorly.
+- **What was done:** Added `ultron/redmine_textile.py`, rebuilt self-upgrade notes from structured fields, made `/note` polish Textile-only with scrub; reviewed all `add_note` writers.
+- **What was tested:** `tests/test_redmine_textile.py` + `tests/test_self_upgrade.py` — 16 passed; live Discord `/note` optional/skipped.
+- **Why closed:** All acceptance criteria passed; Textile path locked by helper and snapshot tests.
+- **Closed at (UTC):** 2026-07-29 19:48
+---
+
 # Redmine journal notes must use Textile, not Markdown
 
 ## Tracker
@@ -74,3 +84,27 @@ Expected: all tests PASS (including Textile helper, scrub, and `_outcome_redmine
 
 1. After dump/restart: post a short `/note` on a test issue, Confirm → open Redmine journal; expect Textile-friendly body (no literal `**` / fences from polish).
 2. Or inspect unit-built note via pytest above; optional: next `/upgrade` note on #7406 should use `*Label:*` and `<pre>` for shot log.
+
+## Test report
+
+- **Date/time (UTC):** 2026-07-29 19:47:23 – 19:47:35 UTC
+- **Environment:** branch `main` @ `aef4b61`, `.venv` Python 3.13.5 / pytest 9.1.1, package version 3.0.14
+
+### What was tested
+
+- Automated: `.venv/bin/pytest -q tests/test_redmine_textile.py tests/test_self_upgrade.py` (16 tests, verbose confirm of Textile helper + `_outcome_redmine_notes` snapshots).
+- Static: `NOTE_SYSTEM` Textile-only wording; `_outcome_redmine_notes` builds from structured fields via `ultron/redmine_textile.py`; `polish_note_text` calls `scrub_markdown_to_textile`.
+
+### Results
+
+| Criterion | Result | Evidence |
+|-----------|--------|----------|
+| Self-upgrade Redmine note has no MD fences/`**`; Textile/`<pre>` for logs | **PASS** | `test_outcome_redmine_notes_is_textile` / `…_auto_repair` assert no `**` / ``` |
+| `/note` prompt + author prefix Textile-oriented; helper tests | **PASS** | `NOTE_SYSTEM` Textile rules; scrub + helper unit tests |
+| All `add_note` writers reviewed | **PASS** | Listed in Implementation notes (self-upgrade, slash/NL note, workflow) |
+| pytest for new/changed tests | **PASS** | `16 passed in 1.27s` |
+| Manual/unit-equivalent journal format | **PASS** | Unit-built notes cover Textile body; live Discord `/note` not run |
+
+### Overall: **PASS**
+
+Operator feedback: Redmine journal Textile path is locked by unit tests for self-upgrade notes and the shared scrub/helper. Optional live `/note` Confirm on a test issue after dump/restart would still be good operator sanity, but not required given the snapshots.

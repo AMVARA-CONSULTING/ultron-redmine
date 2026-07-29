@@ -1,3 +1,13 @@
+---
+## Closing summary (TOP)
+
+- **What happened:** Align Discord `/help`/`/status` and operator docs with Ultron 3.0 memory, confirms, and fast-path behavior.
+- **What was done:** Clarified `_HELP_TEXT` (remember/forget/Confirm/fast-path), added `/status` `user_memory: ready (N files)`, and updated USER_GUIDE/README/OPERATIONS; version bumped 3.0.2 → 3.0.3 at implement time.
+- **What was tested:** Parity + memory tests then full suite — 273 passed; live Discord `/help`/`/status` after dump not run.
+- **Why closed:** All acceptance criteria passed; Discord-facing copy locked by unit tests.
+- **Closed at (UTC):** 2026-07-29 19:48
+---
+
 # Improve help/status/docs parity for Ultron 3.0 features
 
 ## Tracker
@@ -53,3 +63,25 @@ Manual (after dump/restart on Discord host):
 1. `/help` — see `/remember`, `/forget` (`clear_all`), `/memory`, Confirm blurb, fast-path on @mention.
 2. `/status` — line `user_memory: ready (N files)` under Features (N ≥ 0).
 3. Spot-check USER_GUIDE Durable memory / Write confirmation against live Confirm UX on `/log_time` Cancel.
+
+## Test report
+
+- **Date/time (UTC):** 2026-07-29 19:46:56 – 19:47:15 UTC
+- **Environment:** branch `main` @ `aef4b61`, `.venv` Python 3.13.5 / pytest 9.1.1, package version 3.0.14
+
+### What was tested
+
+- Automated: `.venv/bin/pytest -q tests/test_help_status_parity.py tests/test_user_memory.py` then full `.venv/bin/pytest -q`.
+- Static review: `_HELP_TEXT` (remember/forget/clear_all, Confirm, fast-path), USER_GUIDE Durable memory / Write confirmation, README Confirm/fast-path/disk, OPERATIONS `/status` memory line.
+
+### Results
+
+| Criterion | Result | Evidence |
+|-----------|--------|----------|
+| `/help` lists remember/forget/memory + Confirm on mutating cmds | **PASS** | `_HELP_TEXT` + `test_help_status_parity` assertions |
+| Docs mention fast-path + disk check before memory growth | **PASS** | USER_GUIDE, README, OPERATIONS |
+| Full pytest green; no secrets in docs | **PASS** | `273 passed`; status/docs use non-secret `user_memory: ready (N files)` |
+
+### Overall: **PASS**
+
+Operator feedback: Help/status/docs parity for 3.0 memory, confirms, and fast-path is covered by unit tests and matches live strings. Live Discord `/help` and `/status` after dump/restart were not exercised here; parity tests already lock the Discord-facing copy.
