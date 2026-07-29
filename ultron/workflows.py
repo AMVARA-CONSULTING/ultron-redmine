@@ -276,8 +276,8 @@ async def add_formatted_note(
     """Polish note text and optionally post it.
 
     Returns (note_body, issue_url). When ``skip_post`` is True, only polishes
-    (caller confirms, then posts via ``redmine.add_note``). Raises IssueNotFound
-    if the issue is missing.
+    (caller posts via ``redmine.add_note``). Raises IssueNotFound if the issue
+    is missing. Default posts immediately (no Discord Confirm).
     """
     await redmine.get_issue(issue_id, includes="journals")
     url = redmine.issue_url(issue_id)

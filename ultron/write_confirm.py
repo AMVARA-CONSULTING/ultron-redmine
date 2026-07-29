@@ -1,8 +1,9 @@
 """Discord confirm/cancel UI for Redmine-mutating writes.
 
-Why: small models often invent wrong issue ids, hours, or note text. Requiring
-an explicit Confirm from the same Discord user before ``note`` / ``new_ticket`` /
-``log_time`` reduces accidental writes (same idea as My.ai write confirmation).
+Why: small models often invent wrong issue ids or hours. Requiring an explicit
+Confirm from the same Discord user before ``new_ticket`` / ``log_time`` reduces
+accidental writes (same idea as My.ai write confirmation). ``/note`` posts
+immediately without Confirm.
 
 How used: NL dispatch and slash handlers call ``ask_write_confirm`` with a short
 summary; only ``APPROVE`` proceeds to the Redmine API.
@@ -52,7 +53,7 @@ def format_issue_confirm_heading(
     issue_id: int,
     subject: str | None = None,
 ) -> str:
-    """First line(s) for note / log_time confirms, optionally with subject."""
+    """First line(s) for log_time (and similar) confirms, optionally with subject."""
     head = f"**{action}** on issue **#{int(issue_id)}**"
     cropped = crop_issue_subject(subject)
     if cropped:

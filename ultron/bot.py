@@ -390,7 +390,7 @@ _HELP_TEXT = (
 • `/log_time` `issue_id` `hours` [`comments`] [`spent_on`] — Log spent hours (booked as the **Redmine API key** user). Optional **comments** and **spent_on** (YYYY-MM-DD). **Confirm** before write. See **REDMINE_TIME_ACTIVITY_ID** in `.env` when Redmine has several activities.
 • `/summary` `issue_id` [`llm_provider`] [`llm_model`] — Ticket summary (requires LLM). Optional provider/model: autocomplete when configured; omit for defaults.
 • `/ask_issue` `issue_id` `question` [`llm_provider`] [`llm_model`] — Answer from the ticket text (requires LLM).
-• `/note` `issue_id` `text` [`llm_provider`] [`llm_model`] — Append an LLM-polished note (requires LLM). **Confirm** before posting.
+• `/note` `issue_id` `text` [`llm_provider`] [`llm_model`] — Append an LLM-polished note (requires LLM). Posts immediately (no Confirm).
 • `/ol` `text` [`llm_provider`] [`llm_model`] — Ask the configured local model (Ollama when present in **llm_chain**) for technical or general advice. Advisory only — no shell or file access.
 • `/remember` `key` `content` — Save a durable personal note (project prefs, language, habits). Injected into NL/summary prompts. Growth checks free disk first.
 • `/forget` [`key`] [`clear_all`] — Delete one memory key, or set **clear_all** to wipe all of yours.
@@ -398,7 +398,7 @@ _HELP_TEXT = (
 • `/audit` `host` `text` — Run an **Amvara server audit** on an allowlisted host (pi, cursor-agent fallback). SSH diagnostics via agents on the Ultron host.
 • `/ca` `host` `text` — Same as `/audit` but **cursor-agent only** (no pi fallback).
 
-Writes that change Redmine (**`/new_ticket`**, **`/log_time`**, **`/note`**, and the same via @mention) always ask for **Confirm / Cancel** first.
+Writes that change Redmine (**`/new_ticket`**, **`/log_time`**, and the same via @mention) always ask for **Confirm / Cancel** first. **`/note`** posts without Confirm.
 
 **@mention** or **reply**: whitelisted only. Obvious intents (e.g. summarize #N, remember, ping/help/status) use a code **fast-path** (no LLM). Otherwise `discord.nl_commands` / `ULTRON_NL_COMMANDS` enables LLM routing into allowed commands (including Amvara audits and compound Redmine tasks).
 
@@ -2832,23 +2832,8 @@ class UltronBot(commands.Bot):
                     log_read_messages=self.app_cfg.logging.log_read_messages,
                     on_llm_chain_skip=on_skip,
                     note_author_label=_discord_note_author_label(message.author),
-                    skip_post=True,
                 )
                 excerpt = posted[:500] + ("…" if len(posted) > 500 else "")
-                subject = await self._issue_subject_for_confirm(issue_id)
-                confirm = await self._confirm_redmine_write(
-                    author_id=message.author.id,
-                    channel=message.channel,
-                    summary=(
-                        f"{format_issue_confirm_heading(action='Add note', issue_id=issue_id, subject=subject)}\n\n"
-                        f"**Preview:**\n{excerpt}"
-                    ),
-                    status_message=status_message,
-                    abort_nothing_written="note was not posted",
-                )
-                if confirm != ConfirmResult.APPROVE:
-                    return
-                await self.redmine.add_note(issue_id, posted)
                 reply = f"Note added to [{issue_id}]({url}).\n\n**Preview:**\n{excerpt}"
                 self.record_redmine_write("issue_note")
                 await _reply_chunked_to_message(message, reply, edit_first=status_message)
@@ -3448,40 +3433,15 @@ class UltronBot(commands.Bot):
                 note_author_label=_discord_note_author_label(interaction.user),
                 start_provider=sp,
                 model_override=mo,
-                skip_post=True,
             )
             excerpt = formatted[:500] + ("…" if len(formatted) > 500 else "")
-            status_msg = await interaction.original_response()
-            subject = await self._issue_subject_for_confirm(issue_id)
-            confirm = await self._confirm_redmine_write(
-                author_id=interaction.user.id,
-                channel=interaction.channel,
-                summary=(
-                    f"{format_issue_confirm_heading(action='Add note', issue_id=issue_id, subject=subject)}\n\n"
-                    f"**Preview:**\n{excerpt}"
-                ),
-                status_message=status_msg,
-                abort_nothing_written="note was not posted",
-            )
-            if confirm != ConfirmResult.APPROVE:
-                log_slash_output(
-                    "note",
-                    interaction,
-                    action=(
-                        "timed out waiting for confirm"
-                        if confirm == ConfirmResult.TIMEOUT
-                        else "cancelled by user"
-                    ),
-                )
-                return
-            await self.redmine.add_note(issue_id, formatted)
             reply = f"Note added to [{issue_id}]({url}).\n\n**Preview:**\n{excerpt}"
             await _edit_or_followup(interaction, reply, ephemeral=ephemeral)
             self.record_redmine_write("issue_note")
             log_slash_output(
                 "note",
                 interaction,
-                action="delivered confirmation to user",
+                action="posted note and replied",
                 fields=(
                     f"issue_id={issue_id} output_chars={len(reply)} "
                     f"elapsed_s={time.monotonic() - t0:.3f}"

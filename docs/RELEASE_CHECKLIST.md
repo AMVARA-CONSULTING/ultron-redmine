@@ -35,7 +35,7 @@ ultron doctor
 - [ ] Smoke-test critical flows: **`/help`**, whitelist **`/token`** / **`/approve`**, and one Redmine command if applicable.
 - [ ] **`/status`** — version line matches the release (`vX.Y.Z` from `pyproject.toml` / `__version__`).
 - [ ] Durable memory: **`/remember`** a harmless key → **`/memory`** lists it → **`/forget`** removes it.
-- [ ] One write Confirm/Cancel path: e.g. **`/log_time`** (or **`/note`** / **`/new_ticket`**) → **Confirm** writes; repeat and **Cancel** aborts with no write.
+- [ ] One write Confirm/Cancel path: e.g. **`/log_time`** (or **`/new_ticket`**) → **Confirm** writes; repeat and **Cancel** aborts with no write. **`/note`** should post without Confirm.
 - [ ] For Ultron **3.0** releases: also run the fuller **Manual Discord smoke** checklist in [OPERATIONS.md](OPERATIONS.md) (NL fast-path summarize, etc.).
 
 ## 5. Git tag (optional)

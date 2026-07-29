@@ -37,7 +37,7 @@ Use **`/summary`**, **`/ask_issue`**, **`/note`**, and **`/ol`** only when you a
 
 **`/audit`** and **`/ca`** run server diagnostics on allowlisted Amvara hosts (when your operator has configured them). **`/audit`** tries pi first and falls back to **cursor-agent** if pi fails or **Ollama is busy/unreachable**; **`/ca`** uses cursor-agent only. You can also @mention the bot with a host name (e.g. “check RAM on amvara3”) or combine an audit with a Redmine note in one message. If the language model (Ollama) does not respond for natural-language or slash LLM commands, **cursor-agent** can take over when the operator has enabled that fallback.
 
-If you **@mention** the bot (or **reply** to one of its messages) in a channel or DM and you are allowlisted, behavior depends on host settings: with routing **on** and an LLM configured, the bot posts a short **status line** and **updates that same message** while it works (routing → running the chosen action → final answer), similar to slash “thinking” feedback. Obvious intents such as **“summarize #123”**, **“ping”**, or **“remember key: value”** skip the LLM (fast-path). Mutating Redmine actions (**note**, **new ticket**, **log time**) ask for **Confirm / Cancel**. If routing is **off**, you get a brief notice instead. If nothing happens, ask your operator to confirm you are **whitelisted** and, if needed, **Message Content Intent** + **`DISCORD_MESSAGE_CONTENT_INTENT`** in the bot host configuration.
+If you **@mention** the bot (or **reply** to one of its messages) in a channel or DM and you are allowlisted, behavior depends on host settings: with routing **on** and an LLM configured, the bot posts a short **status line** and **updates that same message** while it works (routing → running the chosen action → final answer), similar to slash “thinking” feedback. Obvious intents such as **“summarize #123”**, **“ping”**, or **“remember key: value”** skip the LLM (fast-path). Mutating Redmine actions that create tickets or log time (**new ticket**, **log time**) ask for **Confirm / Cancel**; **note** posts immediately. If routing is **off**, you get a brief notice instead. If nothing happens, ask your operator to confirm you are **whitelisted** and, if needed, **Message Content Intent** + **`DISCORD_MESSAGE_CONTENT_INTENT`** in the bot host configuration.
 
 ## Durable memory
 
@@ -53,11 +53,12 @@ Natural language works too when allowlisted: **“remember preferred_project: 10
 
 ## Write confirmation
 
-Commands that **change Redmine** always show a short preview and **Confirm / Cancel** buttons before writing:
+Commands that **create tickets** or **log time** show a short preview and **Confirm / Cancel** buttons before writing:
 
-- **`/note`** (and @mention “add a note…”)
 - **`/new_ticket`**
 - **`/log_time`**
+
+**`/note`** (and @mention “add a note…”) posts immediately after LLM polish — no Confirm step.
 
 Only the user who started the action can press the buttons. **Cancel** or timeout means **nothing was written**. Read-only commands (`/summary`, `/ask_issue`, listings, memory) do not ask for Confirm.
 
@@ -68,7 +69,8 @@ For operators verifying Ultron **3.0** on a live guild (full checklist with expe
 1. **`/status`** → **v3.0.x**
 2. **`/remember`** → **`/memory`** lists the key; then **`/forget`** removes it
 3. **`@Ultron summarize #N`** → summary without a long routing delay when fast-path hits
-4. **`/log_time`** / **`/note`** → **Confirm** writes; **Cancel** does not
+4. **`/log_time`** → **Confirm** writes; **Cancel** does not
+5. **`/note`** → note appears on the issue without a Confirm prompt
 
 ## Whitelist vs bot admins
 

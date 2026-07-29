@@ -206,7 +206,7 @@ Run on a host with the live bot (e.g. amvara4) after dump/restart. Use a **white
 2. **`/remember`** `preferred_project` = `10_AMVARA` → ack; **`/memory`** lists it; `data/user_memory/user_<id>.json` appears under `ULTRON_STATE_DIR`.
 3. **`@Ultron summarize #<known-issue>`** — fast-path should skip a long “routing…” LLM delay when the intent is obvious; summary returns.
 4. **`/log_time`** on a safe test issue with tiny hours → **Confirm** → time logged; repeat and **Cancel** → no new entry.
-5. **`/note`** → preview **Confirm** → **Cancel** → journal unchanged.
+5. **`/note`** on a safe test issue → note appears in the journal **without** a Confirm prompt (preview in Discord reply only).
 6. **`/forget`** `preferred_project` → gone from **`/memory`**.
 
 Also covered in [USER_GUIDE.md](USER_GUIDE.md) (Durable memory / Write confirmation).

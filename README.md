@@ -37,7 +37,7 @@ In Discord, **`/help`** is the live list. Short map:
 
 Access: user DMs **`/token`** → admin **`/approve`** (or host `ultron add token '…'`). Admins = `DISCORD_ADMIN_IDS` and/or `admins.json`.
 
-**Confirm / Cancel** before Redmine writes (`/note`, `/new_ticket`, `/log_time`). Obvious @mentions (summarize #N, remember, ping) use a code **fast-path** before the LLM router. Durable memory grows only when free disk allows (see [OPERATIONS.md](docs/OPERATIONS.md)).
+**Confirm / Cancel** before Redmine writes that create tickets or log time (`/new_ticket`, `/log_time`). **`/note`** posts immediately (no Confirm). Obvious @mentions (summarize #N, remember, ping) use a code **fast-path** before the LLM router. Durable memory grows only when free disk allows (see [OPERATIONS.md](docs/OPERATIONS.md)).
 
 LLM is optional (`llm_chain` in `config.yaml`). Without it, listings, tickets, and memory still work; `/summary`, `/ask_issue`, `/note`, `/ol`, and NL routing do not.
 
