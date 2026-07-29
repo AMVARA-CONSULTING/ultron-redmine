@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ultron-bot"
-version = "3.0.13"
+version = "3.0.14"
 description = "Discord bot connecting Redmine with OpenAI-compatible LLMs"
 readme = "README.md"
 license = { file = "LICENSE" }
