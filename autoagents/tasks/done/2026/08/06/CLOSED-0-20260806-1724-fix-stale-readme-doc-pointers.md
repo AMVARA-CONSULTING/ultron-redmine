@@ -1,3 +1,12 @@
+---
+## Closing summary (TOP)
+
+- **What happened:** OPERATIONS still claimed README held the full env/slash tables; USER_GUIDE omitted `/top_tickets`.
+- **What was done:** Retargeted OPERATIONS Related to `.env.example` / USER_GUIDE / `/help`; added `/top_tickets` and `/new_ticket` to USER_GUIDE first-commands; patch **3.0.20**.
+- **What was tested:** Docs acceptance and stale-phrase scan PASS; pytest 278 passed; import_ok at **3.0.20**.
+- **Why closed:** All criteria passed; stale README pointers fixed and `/top_tickets` discoverable in USER_GUIDE.
+- **Closed at (UTC):** 2026-08-06 17:50
+---
 # Fix stale README pointers and USER_GUIDE /top_tickets gap
 
 ## Tracker
@@ -57,3 +66,20 @@
    "
    ```
    Expect suite green and `import_ok`. Version strings in `pyproject.toml` and `ultron/__init__.py` both **3.0.20**.
+
+## Test report
+
+- **Date/time (UTC):** 2026-08-06 17:50:15 UTC
+- **Environment:** branch `main`, `.venv`, `__version__` / `pyproject.toml` both **3.0.20**
+
+### What was tested
+Docs acceptance for OPERATIONS Related + USER_GUIDE first-commands, stale-phrase grep, full pytest, and bot import after `load_env()`.
+
+### Results
+1. Docs acceptance — **PASS** — OPERATIONS Related points README at overview/quick start/Docker; env → `.env.example`; slash → USER_GUIDE + `/help`. USER_GUIDE first-commands table includes `/top_tickets` and `/new_ticket`.
+2. Stale-phrase scan — **PASS** — `no_stale_claims` for `full env table` / `README.md — full env`; `top_tickets` present in USER_GUIDE (line 28).
+3. Pytest + import — **PASS** — `278 passed`; `import_ok` from settings + UltronBot; versions both **3.0.20**.
+
+### Overall: **PASS**
+
+Operator feedback: Stale README env/slash claims are gone; allowlisted users can discover `/top_tickets` from USER_GUIDE alone. Suite and import checks are green at 3.0.20.

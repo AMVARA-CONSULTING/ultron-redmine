@@ -1,3 +1,12 @@
+---
+## Closing summary (TOP)
+
+- **What happened:** Full pytest runs were noisy with 35× `DeprecationWarning` from `discord.utils.escape_markdown` (positional `count`).
+- **What was done:** Added `ultron.discord_format.escape_markdown` (keyword `count=`) and switched bot + listings off discord.utils; shipped at **3.0.19** (suite now at **3.0.20**).
+- **What was tested:** Full pytest 278 passed with no escape_markdown DeprecationWarnings; focused helper/listing tests 30 passed; import/escape spot-check PASS; optional Discord SKIP.
+- **Why closed:** All automated criteria passed; deprecation noise cleared without filtering warnings in pytest.
+- **Closed at (UTC):** 2026-08-06 17:50
+---
 # Quell discord.utils escape_markdown DeprecationWarning in tests
 
 ## Tracker
@@ -53,3 +62,22 @@ Full pytest runs report **35×** `DeprecationWarning: 'count' is passed as posit
 
 4. **Manual Discord (optional)**
    - Run `/find_issue` or `/top_tickets` on a subject with `*` / `_`; listing lines should still show escaped markdown (no unintended bold/italic).
+
+## Test report
+
+- **Date/time (UTC):** 2026-08-06 17:49:49 UTC
+- **Environment:** branch `main`, `.venv`, `__version__` 3.0.20 (later patch after this task’s 3.0.19)
+
+### What was tested
+Full pytest with `-W default`, focused discord_format / find_issue / top_tickets / new_ticket tests, import/escape spot-check, and scan for remaining `discord.utils.escape_markdown` usage.
+
+### Results
+1. Full pytest + warning check — **PASS** — `278 passed, 1 warning`; only unrelated `ResourceWarning` (unclosed file in `test_bot_instance_lock`); **no** `DeprecationWarning: 'count' is passed as positional argument` from `discord.utils` / `escape_markdown`.
+2. Focused helper tests — **PASS** — `30 passed` in 1.66s (`test_discord_format.py` + listing-related suites).
+3. Import / escape spot-check — **PASS** — `escape_markdown('*x*')` → `\*x\*`; package version 3.0.20.
+4. Source scan — **PASS** — no `discord.utils.escape_markdown` imports under `ultron/`.
+5. Manual Discord — **SKIP** — optional; not run.
+
+### Overall: **PASS**
+
+Operator feedback: Ultron-owned helper removes the prior 35× DeprecationWarning noise; suite is green with only an unrelated ResourceWarning. Escaping parity for `*` held in the spot-check.
