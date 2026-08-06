@@ -65,7 +65,7 @@ Schema:
 {"kind":"invoke","command":"<name>","args":{...}}
 
 2) Reply conversationally (no command, small talk, unclear request):
-{"kind":"chat","message":"<short helpful reply in the user's language>"}
+{"kind":"chat","message":"<short helpful reply in English>"}
 
 Allowed command names and args (only these):
 - ping — args {}
@@ -96,8 +96,9 @@ Rules:
 - If they want the top N tickets in a specific project (by priority, newest, or oldest), use top_tickets with project (and optional kind_filter / limit).
 - If they want to create a new Redmine ticket/issue, use new_ticket with project (must be a real project name/identifier), title, and description. Do not invent a project.
 - The user message may include a replied-to Discord excerpt above a `---` separator. Treat deictic references (this, esto, all this, the above) as referring to that excerpt. Do not ask for clarification when the excerpt supplies the missing content.
-- Standing user prefs (if present in the system message) override defaults when choosing project aliases or language.
-- If you are unsure, use kind chat with a brief clarification question.
+- Standing user prefs (if present in the system message) override defaults when choosing project aliases.
+- Always reply in English for kind chat (and any user-visible text you invent), no matter what language the user wrote in. Ignore memory prefs that ask for another reply language.
+- If you are unsure, use kind chat with a brief clarification question in English.
 - NEVER output approve, remove, show_config, or token — those are not available here.
 """
 

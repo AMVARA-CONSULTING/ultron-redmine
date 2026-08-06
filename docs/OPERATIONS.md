@@ -190,11 +190,11 @@ Agent logs: **`data/self-upgrade/`** under **`ULTRON_STATE_DIR`**.
 
 - **Startup:** Log lines include Redmine OK / LLM backend (or none). Optional line to `registration_log` when enabled.
 - **`ultron doctor`:** After `state_dir`, prints a read-only **User memory** block (dir present/writable, free disk vs growth floor, `user_*.json` count — no entry contents). Does not create memory files.
-- **Smoke script (no Discord):** [`scripts/smoke_check.py`](../scripts/smoke_check.py) — always runs offline Ultron **3.0** checks (version ≥ 3.0.0, `UserMemoryStore`, NL fast-path, write-confirm helpers), then optional Redmine/LLM connectivity from `.env`. Unwraps the cursor-agent LLM fallback wrapper (same as `ultron doctor`) so the chain primary is pinged.
+- **Smoke script (no Discord):** [`scripts/smoke_check.py`](../scripts/smoke_check.py) — always runs offline Ultron **3.0** checks (version ≥ 3.0.0, Watching presence name, `UserMemoryStore`, NL fast-path, write-confirm helpers), then optional Redmine/LLM connectivity from `.env`. Unwraps the cursor-agent LLM fallback wrapper (same as `ultron doctor`) so the chain primary is pinged.
 
 ```bash
 python scripts/smoke_check.py
-# Expect: OK version / OK user_memory / OK nl_fastpath / OK write_confirm
+# Expect: OK version / OK watching_presence / OK user_memory / OK nl_fastpath / OK write_confirm
 # Plus OK or SKIP for Redmine and LLM depending on .env
 ```
 
@@ -202,12 +202,13 @@ python scripts/smoke_check.py
 
 Run on a host with the live bot (e.g. amvara4) after dump/restart. Use a **whitelist** account and a **safe test issue**.
 
-1. **`/status`** — shows Ultron **v3.0.x** and a non-secret **user_memory: ready (N files)** line.
-2. **`/remember`** `preferred_project` = `10_AMVARA` → ack; **`/memory`** lists it; `data/user_memory/user_<id>.json` appears under `ULTRON_STATE_DIR`.
-3. **`@Ultron summarize #<known-issue>`** — fast-path should skip a long “routing…” LLM delay when the intent is obvious; summary returns.
-4. **`/log_time`** on a safe test issue with tiny hours → **Confirm** → time logged; repeat and **Cancel** → no new entry.
-5. **`/note`** on a safe test issue → note appears in the journal **without** a Confirm prompt (preview in Discord reply only).
-6. **`/forget`** `preferred_project` → gone from **`/memory`**.
+1. **Presence** — member list / profile shows **Watching Ultron vX.Y.Z** (matches `__version__` / `pyproject.toml`).
+2. **`/status`** — shows Ultron **v3.0.x** and a non-secret **user_memory: ready (N files)** line.
+3. **`/remember`** `preferred_project` = `10_AMVARA` → ack; **`/memory`** lists it; `data/user_memory/user_<id>.json` appears under `ULTRON_STATE_DIR`.
+4. **`@Ultron summarize #<known-issue>`** — fast-path should skip a long “routing…” LLM delay when the intent is obvious; summary returns.
+5. **`/log_time`** on a safe test issue with tiny hours → **Confirm** → time logged; repeat and **Cancel** → no new entry.
+6. **`/note`** on a safe test issue → note appears in the journal **without** a Confirm prompt (preview in Discord reply only).
+7. **`/forget`** `preferred_project` → gone from **`/memory`**.
 
 Also covered in [USER_GUIDE.md](USER_GUIDE.md) (Durable memory / Write confirmation).
 

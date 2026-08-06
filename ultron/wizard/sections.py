@@ -98,10 +98,10 @@ def section_redmine(q: Any, state: WizardState) -> None:
         state.yaml_data["redmine"] = rm
     cur_proj = str(rm.get("find_issue_project") or "10_AMVARA").strip() or "10_AMVARA"
     print(f"redmine.find_issue_project (default project for /find_issue): {cur_proj}\n")
-    if _yn(q, "Edit find_issue_project (Redmine project id for /find_issue)?", default=False):
+    if _yn(q, "Edit find_issue_project (Redmine project for /find_issue)?", default=False):
         rm["find_issue_project"] = _text(
             q,
-            "find_issue_project (identifier or numeric id)",
+            "find_issue_project (identifier, display name, or numeric id)",
             default=cur_proj,
         ).strip() or "10_AMVARA"
 

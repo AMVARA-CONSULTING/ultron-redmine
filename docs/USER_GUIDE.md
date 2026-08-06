@@ -33,7 +33,7 @@ This document is for **people who use the bot in Discord**, not for server opera
 
 Command map and setup pointers: [README.md](../README.md). In Discord, **`/help`** is always current.
 
-Use **`/summary`**, **`/ask_issue`**, **`/note`**, and **`/ol`** only when you are allowlisted **and** the bot has an LLM configured; otherwise the bot replies with setup instructions for operators. **`/ol`** is for general or technical questions (Redmine, Ultron, Linux) — advisory only, not ticket-specific like **`/ask_issue`**.
+Use **`/summary`**, **`/ask_issue`**, **`/note`**, and **`/ol`** only when you are allowlisted **and** the bot has an LLM configured; otherwise the bot replies with setup instructions for operators. **`/ol`** is for general or technical questions (Redmine, Ultron, Linux) — advisory only, not ticket-specific like **`/ask_issue`**. Answers from these commands are **always in English**.
 
 **`/audit`** and **`/ca`** run server diagnostics on allowlisted Amvara hosts (when your operator has configured them). **`/audit`** tries pi first and falls back to **cursor-agent** if pi fails or **Ollama is busy/unreachable**; **`/ca`** uses cursor-agent only. You can also @mention the bot with a host name (e.g. “check RAM on amvara3”) or combine an audit with a Redmine note in one message. If the language model (Ollama) does not respond for natural-language or slash LLM commands, **cursor-agent** can take over when the operator has enabled that fallback.
 
@@ -41,7 +41,7 @@ If you **@mention** the bot (or **reply** to one of its messages) in a channel o
 
 ## Durable memory
 
-Allowlisted users can store short personal prefs that Ultron injects into NL routing and LLM prompts (summaries, ask, `/ol`):
+Allowlisted users can store short personal prefs that Ultron injects into NL routing and LLM prompts (summaries, ask, `/ol`). **LLM replies always stay in English**, even if you write in another language or store a language preference.
 
 | Command | What it does |
 |--------|----------------|
@@ -66,11 +66,12 @@ Only the user who started the action can press the buttons. **Cancel** or timeou
 
 For operators verifying Ultron **3.0** on a live guild (full checklist with expected outcomes: [OPERATIONS.md](OPERATIONS.md) → **Manual Discord smoke**):
 
-1. **`/status`** → **v3.0.x**
-2. **`/remember`** → **`/memory`** lists the key; then **`/forget`** removes it
-3. **`@Ultron summarize #N`** → summary without a long routing delay when fast-path hits
-4. **`/log_time`** → **Confirm** writes; **Cancel** does not
-5. **`/note`** → note appears on the issue without a Confirm prompt
+1. Member list / profile shows **Watching Ultron vX.Y.Z** (bot presence)
+2. **`/status`** → **v3.0.x**
+3. **`/remember`** → **`/memory`** lists the key; then **`/forget`** removes it
+4. **`@Ultron summarize #N`** → summary without a long routing delay when fast-path hits
+5. **`/log_time`** → **Confirm** writes; **Cancel** does not
+6. **`/note`** → note appears on the issue without a Confirm prompt
 
 ## Whitelist vs bot admins
 

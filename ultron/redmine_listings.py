@@ -7,9 +7,8 @@ from dataclasses import dataclass
 from difflib import SequenceMatcher
 from typing import Any, Literal
 
-from discord.utils import escape_markdown
-
 from ultron.config import UnassignedOpenConfig
+from ultron.discord_format import escape_markdown
 from ultron.redmine import (
     RedmineClient,
     RedmineError,
@@ -225,18 +224,43 @@ async def markdown_find_issues(
 ) -> tuple[str | None, str | None, int]:
     """Build markdown for ``/find_issue``: up to ``detail_limit`` cropped titles + overflow id links.
 
+    ``project_id`` may be a Redmine project **identifier**, **display name**, or numeric id
+    (resolved via ``list_projects`` + ``resolve_redmine_project``, same as ``/top_tickets``).
+
     Returns ``(body, error, total)``. ``total`` is Redmine's ``total_count`` (-1 on error).
     """
     q = (text or "").strip()
-    proj = (project_id or "").strip()
+    proj_query = (project_id or "").strip()
     if not q:
         return None, "Pass **`text`**: a short hint to search for (title, description, notes, …).", -1
-    if not proj:
-        return None, "Configure **`redmine.find_issue_project`** in `config.yaml` (Redmine project identifier).", -1
+    if not proj_query:
+        return (
+            None,
+            "Configure **`redmine.find_issue_project`** in `config.yaml` "
+            "(Redmine project identifier or display name).",
+            -1,
+        )
+
+    try:
+        projects = await redmine.list_projects()
+    except RedmineError as e:
+        return None, f"Redmine error: {e}", -1
+
+    matched = resolve_redmine_project(proj_query, projects)
+    if matched is None:
+        safe_q = escape_markdown(proj_query)
+        return (
+            None,
+            f"No Redmine project matching **{safe_q}**. "
+            "Set **`redmine.find_issue_project`** to a project **identifier** "
+            "(e.g. `amvara-general`) or display **name** (e.g. `10_AMVARA`).",
+            -1,
+        )
+
     try:
         hits, total = await redmine.search_issues_collect(
             q,
-            project_id=proj,
+            project_id=matched.identifier,
             max_results=max_results,
         )
     except ValueError as e:
@@ -256,11 +280,17 @@ async def markdown_find_issues(
         seen.add(iid)
         parsed.append((iid, subject))
 
+    safe_name = escape_markdown(matched.name)
+    safe_ident = escape_markdown(matched.identifier)
+    proj_label = f"**{safe_name}** (`{safe_ident}`)"
+    if not matched.exact:
+        safe_q_proj = escape_markdown(proj_query)
+        proj_label += f" (matched from `{safe_q_proj}`)"
+
     if not parsed:
         safe_q = escape_markdown(q)
-        safe_proj = escape_markdown(proj)
         return (
-            f"No issues matching **{safe_q}** in project **{safe_proj}**.",
+            f"No issues matching **{safe_q}** in project {proj_label}.",
             None,
             0,
         )
@@ -269,9 +299,8 @@ async def markdown_find_issues(
     reported_total = max(total, len(parsed))
     n_detail = min(detail_limit, len(parsed))
     safe_q = escape_markdown(q)
-    safe_proj = escape_markdown(proj)
     header = (
-        f"**Find issue** · `{safe_q}` · project `{safe_proj}` · "
+        f"**Find issue** · `{safe_q}` · project {proj_label} · "
         f"**{reported_total}** match{'es' if reported_total != 1 else ''}"
     )
     lines = [
@@ -340,10 +369,31 @@ def resolve_redmine_project(
     query: str,
     projects: list[dict[str, Any]],
 ) -> ResolvedRedmineProject | None:
-    """Resolve ``query`` to a project by identifier or name (exact, substring, then fuzzy)."""
+    """Resolve ``query`` to a project by identifier, name, or numeric id (exact, substring, then fuzzy)."""
     q = (query or "").strip()
     if not q or not projects:
         return None
+
+    # Exact numeric id (Redmine ``projects[].id``).
+    if q.isdigit():
+        want = int(q)
+        for proj in projects:
+            ident = str(proj.get("identifier") or "").strip()
+            name = str(proj.get("name") or "").strip()
+            raw_id = proj.get("id")
+            try:
+                nid = int(raw_id)
+            except (TypeError, ValueError):
+                continue
+            if nid == want and ident:
+                return ResolvedRedmineProject(
+                    identifier=ident,
+                    name=name or ident,
+                    numeric_id=nid,
+                    exact=True,
+                    score=1.0,
+                )
+
     q_fold = _fold_project_key(q)
     if not q_fold:
         return None

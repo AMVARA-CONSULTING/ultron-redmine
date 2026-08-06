@@ -16,11 +16,14 @@ import discord
 import httpx
 from discord import app_commands
 from discord.ext import commands, tasks
-from discord.utils import escape_markdown
 from openai import APIConnectionError, APIStatusError, APITimeoutError
 
 from ultron import __version__ as _ULTRON_VERSION
-from ultron.discord_format import embed_issue_list_intro, embed_time_summary
+from ultron.discord_format import (
+    embed_issue_list_intro,
+    embed_time_summary,
+    escape_markdown,
+)
 from ultron.discord_reply_context import (
     ReplyContext,
     build_effective_user_text,
@@ -383,7 +386,7 @@ _HELP_TEXT = (
 • `/list_new_issues` — Issues in the configured “new” status past the minimum age (see `discord.new_issues`).
 • `/issues_by_status` `status` — Same style of list for a Redmine status name (limits from `discord.new_issues`).
 • `/list_unassigned_issues` — Unassigned open issues past the minimum age (`discord.unassigned_open`).
-• `/find_issue` `text` — Full-text search for issues in the default Redmine project (`redmine.find_issue_project`, default **10_AMVARA**): subject, description, notes. Up to 20 titles (15 chars) + issue links; extras as issue-number links only.
+• `/find_issue` `text` — Full-text search for issues in the default Redmine project (`redmine.find_issue_project`, default **10_AMVARA**; identifier or display name): subject, description, notes. Up to 20 titles (15 chars) + issue links; extras as issue-number links only.
 • `/top_tickets` `project` [`kind_filter`] [`limit`] — Top **open** issues in a project (fuzzy match on identifier or name). `kind_filter`: **priority** (default), **newests**, or **oldests**. `limit` default **10** (max 50).
 • `/new_ticket` `project` `title` `description` — Create a Redmine issue in an **existing** project (identifier or name; fuzzy match). Title and description are free text; other fields use Redmine defaults. **Confirm** before create. Reply includes a link to the new issue.
 • `/time_summary` `user` — Redmine **spent hours** for a user: **today**, **this week** (Mon–today), **last 7 days** (by **spent_on**), and **last 24 h** (by **created_on**). `user` = Redmine login, numeric id, or **`me`**. If login lookup fails (permissions), set **redmine.user_id_by_login** in `config.yaml`.
@@ -392,7 +395,7 @@ _HELP_TEXT = (
 • `/ask_issue` `issue_id` `question` [`llm_provider`] [`llm_model`] — Answer from the ticket text (requires LLM).
 • `/note` `issue_id` `text` [`llm_provider`] [`llm_model`] — Append an LLM-polished note (requires LLM). Posts immediately (no Confirm).
 • `/ol` `text` [`llm_provider`] [`llm_model`] — Ask the configured local model (Ollama when present in **llm_chain**) for technical or general advice. Advisory only — no shell or file access.
-• `/remember` `key` `content` — Save a durable personal note (project prefs, language, habits). Injected into NL/summary prompts. Growth checks free disk first.
+• `/remember` `key` `content` — Save a durable personal note (project prefs, habits). Injected into NL/summary prompts. Replies stay English. Growth checks free disk first.
 • `/forget` [`key`] [`clear_all`] — Delete one memory key, or set **clear_all** to wipe all of yours.
 • `/memory` — List your durable memory entries.
 • `/audit` `host` `text` — Run an **Amvara server audit** on an allowlisted host (pi, cursor-agent fallback). SSH diagnostics via agents on the Ultron host.
@@ -898,7 +901,7 @@ def _format_show_config(app_cfg: AppConfig, env: EnvSettings) -> str:
         f"(for **`/time_summary`** when login API lookup is unavailable)",
         f"• **redmine.time_summary_max_entries:** {app_cfg.redmine.time_summary_max_entries}",
         f"• **redmine.find_issue_project:** {app_cfg.redmine.find_issue_project!r} "
-        f"(default project for **`/find_issue`**)",
+        f"(default project for **`/find_issue`**; identifier or display name)",
         f"• **discord.ephemeral_default:** {app_cfg.discord.ephemeral_default}",
         f"• **discord.issue_metadata_header:** {app_cfg.discord.issue_metadata_header}",
         f"• **discord.new_issues:** status_name={ni.status_name!r} list_limit={ni.list_limit} "

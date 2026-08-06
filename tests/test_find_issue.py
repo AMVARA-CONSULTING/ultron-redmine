@@ -59,12 +59,22 @@ def test_parse_router_find_issue_rejects_empty_text() -> None:
     assert isinstance(out, NLParseError)
 
 
+def _amvara_projects() -> list[dict]:
+    """Display name 10_AMVARA maps to identifier amvara-general (live Redmine shape)."""
+    return [{"id": 2, "identifier": "amvara-general", "name": "10_AMVARA"}]
+
+
 def test_markdown_find_issues_empty(monkeypatch) -> None:
     client = RedmineClient(base_url="https://redmine.example.com", api_key="x")
 
-    async def _collect(*_a, **_k):
+    async def _projects():
+        return _amvara_projects()
+
+    async def _collect(query, *, project_id, max_results=200):
+        assert project_id == "amvara-general"
         return [], 0
 
+    monkeypatch.setattr(client, "list_projects", _projects)
     monkeypatch.setattr(client, "search_issues_collect", _collect)
 
     async def _run():
@@ -77,6 +87,7 @@ def test_markdown_find_issues_empty(monkeypatch) -> None:
     assert total == 0
     assert body is not None
     assert "No issues matching" in body
+    assert "amvara-general" in body
 
 
 def test_markdown_find_issues_overflow(monkeypatch) -> None:
@@ -90,9 +101,14 @@ def test_markdown_find_issues_overflow(monkeypatch) -> None:
         for i in range(1, 26)
     ]
 
-    async def _collect(*_a, **_k):
+    async def _projects():
+        return _amvara_projects()
+
+    async def _collect(query, *, project_id, max_results=200):
+        assert project_id == "amvara-general"
         return hits, 25
 
+    monkeypatch.setattr(client, "list_projects", _projects)
     monkeypatch.setattr(client, "search_issues_collect", _collect)
 
     async def _run():
@@ -108,3 +124,61 @@ def test_markdown_find_issues_overflow(monkeypatch) -> None:
     assert "[#21](https://redmine.example.com/issues/21)" in body
     assert "Subject number 21" not in body
     assert body.count("\n") >= 20
+    assert "10\\_AMVARA" in body or "10_AMVARA" in body
+    assert "amvara-general" in body
+
+
+def test_markdown_find_issues_resolves_display_name(monkeypatch) -> None:
+    """Config default 10_AMVARA is the display name; search must use identifier."""
+    client = RedmineClient(base_url="https://redmine.example.com", api_key="x")
+    seen: dict[str, str] = {}
+
+    async def _projects():
+        return _amvara_projects()
+
+    async def _collect(query, *, project_id, max_results=200):
+        seen["project_id"] = project_id
+        seen["query"] = query
+        return [
+            {
+                "id": 7127,
+                "title": "Issue #7127 (New): Discussion with Ralf",
+                "type": "issue",
+            }
+        ], 1
+
+    monkeypatch.setattr(client, "list_projects", _projects)
+    monkeypatch.setattr(client, "search_issues_collect", _collect)
+
+    async def _run():
+        return await markdown_find_issues(
+            redmine=client, text="Icinga", project_id="10_AMVARA"
+        )
+
+    body, err, total = asyncio.run(_run())
+    assert err is None
+    assert total == 1
+    assert seen["project_id"] == "amvara-general"
+    assert seen["query"] == "Icinga"
+    assert body is not None
+    assert "7127" in body
+
+
+def test_markdown_find_issues_unknown_project(monkeypatch) -> None:
+    client = RedmineClient(base_url="https://redmine.example.com", api_key="x")
+
+    async def _projects():
+        return _amvara_projects()
+
+    monkeypatch.setattr(client, "list_projects", _projects)
+
+    async def _run():
+        return await markdown_find_issues(
+            redmine=client, text="Icinga", project_id="no-such-project"
+        )
+
+    body, err, total = asyncio.run(_run())
+    assert body is None
+    assert total == -1
+    assert err is not None
+    assert "No Redmine project matching" in err

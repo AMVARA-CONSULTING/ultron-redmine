@@ -2,7 +2,35 @@
 
 from __future__ import annotations
 
+import re
+
 import discord
+
+# Mirror discord.utils.escape_markdown stock regexes (discord.py 2.x) so we can
+# call re.sub with keyword count=/flags= and avoid DeprecationWarning on 3.13+.
+_MARKDOWN_ESCAPE_COMMON = r"^>(?:>>)?\s|\[.+\]\(.+\)|^#{1,3}|^\s*-"
+_MARKDOWN_STOCK_REGEX = rf"(?P<markdown>[_\\~|\*`]|{_MARKDOWN_ESCAPE_COMMON})"
+_URL_REGEX = r"(?P<url><[^: >]+:\/[^ >]+>|(?:https?|steam):\/\/[^\s<]+[^<.,:;\"\'\]\s])"
+
+
+def escape_markdown(text: str, *, ignore_links: bool = True) -> str:
+    """Escape Discord markdown special characters (discord.py-compatible defaults).
+
+    Prefer this over ``discord.utils.escape_markdown``, which passes ``count`` as a
+    positional ``re.sub`` argument and emits DeprecationWarning on Python 3.13+.
+    """
+
+    def replacement(match: re.Match[str]) -> str:
+        groupdict = match.groupdict()
+        is_url = groupdict.get("url")
+        if is_url:
+            return is_url
+        return "\\" + groupdict["markdown"]
+
+    regex = _MARKDOWN_STOCK_REGEX
+    if ignore_links:
+        regex = f"(?:{_URL_REGEX}|{regex})"
+    return re.sub(regex, replacement, text, count=0, flags=re.MULTILINE)
 
 
 def embed_time_summary(

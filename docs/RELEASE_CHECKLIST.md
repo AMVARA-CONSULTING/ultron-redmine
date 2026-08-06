@@ -18,7 +18,7 @@ python -m pytest tests/ -q
 
 ## 3. Optional smoke checks
 
-- [ ] Run **[`scripts/smoke_check.py`](../scripts/smoke_check.py)** (no Discord required). Offline Ultron **3.0** lines (**OK version**, **OK user_memory**, **OK nl_fastpath**, **OK write_confirm**) must pass; Redmine/LLM may SKIP without credentials.
+- [ ] Run **[`scripts/smoke_check.py`](../scripts/smoke_check.py)** (no Discord required). Offline Ultron **3.0** lines (**OK version**, **OK watching_presence**, **OK user_memory**, **OK nl_fastpath**, **OK write_confirm**) must pass; Redmine/LLM may SKIP without credentials.
 - [ ] Run **`ultron doctor`** (or **`python -m ultron doctor`**) — same entry as `[project.scripts]` `ultron` — and confirm paths, bindings, Redmine, and LLM health lines look sane.
 
 ```bash
@@ -33,10 +33,11 @@ ultron doctor
 
 - [ ] Start the bot against a **test** guild or token; confirm slash commands appear (guild sync if `DISCORD_GUILD_ID` is set).
 - [ ] Smoke-test critical flows: **`/help`**, whitelist **`/token`** / **`/approve`**, and one Redmine command if applicable.
+- [ ] **Presence** — Discord shows **Watching Ultron vX.Y.Z** matching the release version.
 - [ ] **`/status`** — version line matches the release (`vX.Y.Z` from `pyproject.toml` / `__version__`).
 - [ ] Durable memory: **`/remember`** a harmless key → **`/memory`** lists it → **`/forget`** removes it.
 - [ ] One write Confirm/Cancel path: e.g. **`/log_time`** (or **`/new_ticket`**) → **Confirm** writes; repeat and **Cancel** aborts with no write. **`/note`** should post without Confirm.
-- [ ] For Ultron **3.0** releases: also run the fuller **Manual Discord smoke** checklist in [OPERATIONS.md](OPERATIONS.md) (NL fast-path summarize, etc.).
+- [ ] For Ultron **3.0** releases: also run the fuller **Manual Discord smoke** checklist in [OPERATIONS.md](OPERATIONS.md) (NL fast-path summarize, Watching presence, etc.).
 
 ## 5. Git tag (optional)
 

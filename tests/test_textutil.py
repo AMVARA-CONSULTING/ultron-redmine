@@ -102,3 +102,19 @@ def test_prompt_budget_ballpark_chars() -> None:
     # Memory appears once in the summary user prompt (not duplicated).
     assert user_prompt.count(prefix) == 1
     assert len(user_prompt) <= MEMORY_PROMPT_MAX_CHARS + 20 + ISSUE_SUMMARY_MAX_TOTAL_CHARS + 80
+
+
+def test_llm_prompts_always_english() -> None:
+    """Discord-facing LLM system prompts must force English replies."""
+    from ultron.ollama_slash import load_ol_system_prompt
+    from ultron.workflows import ASK_ABOUT_ISSUE_SYSTEM, NOTE_SYSTEM
+
+    assert "in English" in NL_ROUTER_SYSTEM
+    assert "user's language" not in NL_ROUTER_SYSTEM
+    assert "Always reply in English" in SUMMARY_SYSTEM
+    assert "Same language as the ticket" not in SUMMARY_SYSTEM
+    assert "Always reply in English" in ASK_ABOUT_ISSUE_SYSTEM
+    assert "Always write the note in English" in NOTE_SYSTEM
+    ol = load_ol_system_prompt()
+    assert "Always respond in English" in ol
+    assert "unless the user explicitly asks" not in ol

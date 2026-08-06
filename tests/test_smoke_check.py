@@ -124,6 +124,7 @@ def test_check_ultron30_offline(capsys) -> None:
     assert smoke.check_ultron30_offline() is True
     out = capsys.readouterr().out
     assert "OK version:" in out
+    assert "OK watching_presence:" in out
     assert "OK user_memory:" in out
     assert "OK nl_fastpath:" in out
     assert "OK write_confirm:" in out

@@ -14,19 +14,20 @@ from ultron.workflow_log import wf_info
 SUMMARY_SYSTEM = (
     "You summarize Redmine issues for a technical team. Be concise and actionable. "
     "Sections: context, status, blockers (if any), next steps. "
-    "Same language as the ticket when obvious; else English. Keep under ~400 words."
+    "Always reply in English, regardless of ticket or user language. Keep under ~400 words."
 )
 
 ASK_ABOUT_ISSUE_SYSTEM = (
     "You answer questions about a Redmine issue. "
     "Use only the ticket text (description, metadata, journal notes). "
     "If information is missing, say so. Be concise. "
-    "Same language as the question when obvious; else English."
+    "Always reply in English, regardless of the question or ticket language."
 )
 
 NOTE_SYSTEM = (
     "You write the body of one Redmine journal note. "
     "Output ONLY that note text and nothing else (no preamble, no labels). "
+    "Always write the note in English, regardless of the user's language. "
     "Do not add a byline or a 'Note written by … from Discord' line; the application prepends that after generation. "
     "Never repeat or quote the issue subject/title, issue number, project name, or tracker unless the user explicitly asked for them in their message. "
     "If the user asks a direct question—including simple arithmetic—answer it inside the note. "

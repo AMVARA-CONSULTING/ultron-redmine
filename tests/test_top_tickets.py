@@ -49,6 +49,12 @@ def test_resolve_redmine_project_exact_name_and_identifier() -> None:
     assert by_ident.identifier == "dip-re"
     assert by_ident.exact is True
 
+    by_id = resolve_redmine_project("2", projects)
+    assert by_id is not None
+    assert by_id.identifier == "10_amvara"
+    assert by_id.numeric_id == 2
+    assert by_id.exact is True
+
 
 def test_resolve_redmine_project_fuzzy() -> None:
     projects = [

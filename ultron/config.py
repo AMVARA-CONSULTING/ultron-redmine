@@ -108,7 +108,7 @@ class RedmineConfig:
     user_id_by_login: dict[str, int] = field(default_factory=dict)
     #: Max time entries fetched for `/time_summary` (paginated, capped).
     time_summary_max_entries: int = 2000
-    #: Default Redmine project identifier (or numeric id) for `/find_issue` full-text search.
+    #: Default Redmine project for `/find_issue` (identifier, display name, or numeric id).
     find_issue_project: str = "10_AMVARA"
 
 

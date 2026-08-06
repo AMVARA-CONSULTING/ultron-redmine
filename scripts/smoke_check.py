@@ -6,7 +6,8 @@ Run from repo root::
     python scripts/smoke_check.py
 
 Always runs offline checks (version ≥ 3.0.0, ``UserMemoryStore``, NL fast-path,
-write-confirm helpers). Optionally probes Redmine/LLM when ``.env`` has credentials.
+write-confirm helpers, Watching presence name). Optionally probes Redmine/LLM when
+``.env`` has credentials.
 """
 from __future__ import annotations
 
@@ -46,6 +47,7 @@ def check_ultron30_offline() -> bool:
 
     try:
         from ultron import __version__
+        from ultron.bot import watching_presence_name
         from ultron.nl_fastpath import NLInvoke, NLMemoryUpdate, try_nl_fastpath
         from ultron.user_memory import UserMemoryStore
         from ultron.write_confirm import (
@@ -64,6 +66,16 @@ def check_ultron30_offline() -> bool:
         ok = False
     else:
         print(f"OK version: {__version__} (>= 3.0.0)")
+
+    try:
+        expected = f"Ultron v{__version__}"
+        got = watching_presence_name()
+        if got != expected:
+            raise AssertionError(f"expected {expected!r}, got {got!r}")
+        print(f"OK watching_presence: {got}")
+    except Exception as e:
+        print(f"FAIL watching_presence: {e}")
+        ok = False
 
     try:
         with tempfile.TemporaryDirectory(prefix="ultron-smoke-mem-") as tmp:

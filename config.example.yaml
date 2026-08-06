@@ -20,7 +20,7 @@ redmine:
   # Example: 2000
   time_summary_max_entries: null
 
-  # find_issue_project — Default Redmine project identifier (or numeric id) for /find_issue full-text search (subject, description, notes). Empty/null uses 10_AMVARA.
+  # find_issue_project — Default Redmine project for /find_issue full-text search (subject, description, notes). Accepts project identifier, display name, or numeric id (resolved like /top_tickets). Empty/null uses 10_AMVARA.
   # Example: 10_AMVARA
   find_issue_project: null
 
