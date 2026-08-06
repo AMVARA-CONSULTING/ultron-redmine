@@ -21,3 +21,39 @@
 - Add **`/top_tickets`** (and briefly **`/new_ticket`** if still only under Write confirmation) to USER_GUIDE first-commands or an adjacent short blurb so allowlisted users can find them without reading `_HELP_TEXT` source.
 - Pass: no doc claims README is the full env/slash reference; USER_GUIDE mentions `/top_tickets`.
 - Fail: OPERATIONS Related line unchanged and USER_GUIDE still omits `/top_tickets`.
+
+## Implementation notes (coder)
+
+- `docs/OPERATIONS.md` Related: README is overview / quick start / short map / Docker; env → `.env.example`; slash → USER_GUIDE + `/help`.
+- `docs/USER_GUIDE.md` First commands: added `/top_tickets` and `/new_ticket`; pointer text no longer implies README is the full env/slash reference.
+- Patch bump **3.0.19 → 3.0.20** (`pyproject.toml` + `ultron/__init__.py`).
+
+## Testing instructions
+
+1. **Docs acceptance**
+   - `docs/OPERATIONS.md` Related must **not** say README has a “full env table” or full slash-command reference.
+   - Related should point at `.env.example`, USER_GUIDE / `/help`, and README for overview/Docker only.
+   - `docs/USER_GUIDE.md` “First commands to try” table must include **`/top_tickets`** (and preferably **`/new_ticket`**).
+
+2. **Stale-phrase scan**
+   ```bash
+   grep -RIn 'full env table\|README.md — full env' docs/ README.md || echo 'no_stale_claims'
+   grep -n 'top_tickets' docs/USER_GUIDE.md
+   ```
+   Expect no stale “full env” README claims; at least one `top_tickets` hit in USER_GUIDE.
+
+3. **Pytest + import**
+   ```bash
+   .venv/bin/pip install -q -e .
+   .venv/bin/pytest -q
+   .venv/bin/python -c "
+   from dotenv import load_dotenv
+   from pathlib import Path
+   load_dotenv(Path('.') / '.env')
+   from ultron.settings import load_env
+   from ultron.bot import UltronBot
+   load_env()
+   print('import_ok')
+   "
+   ```
+   Expect suite green and `import_ok`. Version strings in `pyproject.toml` and `ultron/__init__.py` both **3.0.20**.

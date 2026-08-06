@@ -25,13 +25,15 @@ This document is for **people who use the bot in Discord**, not for server opera
 | **`/ping`** | Quick connectivity check (allowlisted users). |
 | **`/status`** | Bot summary: version, uptime, latency, Redmine host, LLM, NL routing, durable memory file count, reports (allowlisted). |
 | **`/find_issue`** | Full-text search for issues in the default Redmine project (allowlisted). |
+| **`/top_tickets`** | Top **open** issues in a project by priority (default), newest, or oldest (allowlisted). |
+| **`/new_ticket`** | Create a Redmine issue in an existing project — **Confirm** before write (allowlisted). |
 | **`/issues_by_status`** | List issues in a Redmine status you name (allowlisted; same age/limit rules as new-issue listings). |
 | **`/time_summary`** | Spent-hours totals for a Redmine user (`me`, login, or id) (allowlisted). |
 | **`/log_time`** | Log spent hours on an issue — **Confirm** before write (allowlisted). |
 | **`/remember`** / **`/forget`** / **`/memory`** | Durable personal prefs (injected into NL/LLM prompts; disk-space checked before growth). |
 | **`/rpsls`** | Rock–paper–scissors–lizard–Spock vs the bot (allowlisted). |
 
-Command map and setup pointers: [README.md](../README.md). In Discord, **`/help`** is always current.
+In Discord, **`/help`** is always current. Short command map and setup: [README.md](../README.md); env detail: [`.env.example`](../.env.example) and [OPERATIONS.md](OPERATIONS.md).
 
 Use **`/summary`**, **`/ask_issue`**, **`/note`**, and **`/ol`** only when you are allowlisted **and** the bot has an LLM configured; otherwise the bot replies with setup instructions for operators. **`/ol`** is for general or technical questions (Redmine, Ultron, Linux) — advisory only, not ticket-specific like **`/ask_issue`**. Answers from these commands are **always in English**.
 

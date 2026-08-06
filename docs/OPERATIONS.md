@@ -226,4 +226,6 @@ Preflight scripts under **`scripts/`** (`redmine-reviewer-preflight.sh`, `enhanc
 ## Related documentation
 
 - [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md) — what to verify before tagging a release.
-- [README.md](../README.md) — full env table, slash commands, Docker.
+- [README.md](../README.md) — overview, quick start, short command map, Docker.
+- [`.env.example`](../.env.example) — environment variable reference (with comments); this file and the sections above cover env detail (not the README).
+- [USER_GUIDE.md](USER_GUIDE.md) — Discord user guide; live slash list via **`/help`**.
