@@ -144,22 +144,9 @@ committer_paths_all_stamp_allowlist() {
   ((had == 1))
 }
 
-committer_try_local_stamp_only() {
-  [[ "${AGENT_COMMITTER_LOCAL:-1}" == "0" ]] && return 1
-  local br
-  br=$(cd "$REPO_ROOT" && git rev-parse --abbrev-ref HEAD 2>/dev/null) || return 1
-  [[ "$br" == "main" ]] || return 1
-  committer_paths_all_stamp_allowlist || return 1
-  (
-    cd "$REPO_ROOT" || exit 1
-    git add -- autoagents/001-redmine-reviewer/time-of-last-review.txt
-    git add -- autoagents/008-enhancement-reviewer/time-of-last-review.txt 2>/dev/null || true
-    git diff --staged --quiet && exit 1
-    git commit -m "chore(autoagents): update reviewer time-of-last-review stamps"
-    git pull --rebase --autostash origin main
-    git push origin main
-  )
-}
+# Reviewer time-of-last-review.txt files are local operational state for
+# preflight cadence. Never auto-commit or push stamp-only dirty trees
+# (keeps main free of 24/7 chore noise).
 
 run_agent() {
   local desc="$1" cond="$2" prompt="$3" msg="$4"
@@ -330,12 +317,12 @@ step_committer() {
   has_uncommitted_changes || { echo "----- committer (skip: clean tree)"; return 0; }
   sync_repo || return 0
   has_uncommitted_changes || { echo "----- committer (skip after sync: clean)"; return 0; }
-  if [[ "${AGENT_COMMITTER_LOCAL:-1}" != "0" ]] && committer_try_local_stamp_only; then
-    echo "----- committer (local stamp-only push)"
+  if committer_paths_all_stamp_allowlist; then
+    echo "----- committer (skip: only local reviewer stamps — not committing)"
     return 0
   fi
   run_agent "committer" "has_uncommitted_changes" "040-committer.md" \
-    "Run 040-committer on main. Commit when ready; bump pyproject + __init__ version; push origin main. Do not run ultron-dump.sh — the orchestrator does that after committer." "committer"
+    "Run 040-committer on main. Commit when ready; bump pyproject + __init__ version; push origin main. Do not commit stamp-only time-of-last-review.txt changes. Do not run ultron-dump.sh — the orchestrator does that after committer." "committer"
 }
 
 ultron_runtime_diff_quiet() {
