@@ -423,6 +423,35 @@ def resolve_redmine_project_query(
     return resolve_redmine_project_prefix(q, projects)
 
 
+def _project_leading_number(name: str, identifier: str = "") -> int:
+    """Extract an Amvara-style project code number from the display name.
+
+    Prefers two-or-more digit codes before ``_`` / ``-`` / space (e.g. ``05_``,
+    ``93_DIP``, ``98-1_Trucklog``, ``X - closed - 93_…``). Ignores short version
+    fragments like ``Mix_2.0`` / ``dip-v2``. Unnumbered names sort last.
+    """
+    hay = (name or "").strip()
+    if not hay:
+        hay = (identifier or "").strip()
+    if not hay:
+        return 10**9
+    # Prefer NN_ / NN- style codes (at least 2 digits) anywhere in the name.
+    m = re.search(r"(?<!\d)(\d{2,})(?=[_\-\s]|$)", hay)
+    if m:
+        try:
+            return int(m.group(1))
+        except ValueError:
+            pass
+    # Leading digits at start of name (e.g. rare ``5_foo``).
+    m = re.match(r"^(\d+)", hay)
+    if m:
+        try:
+            return int(m.group(1))
+        except ValueError:
+            pass
+    return 10**9
+
+
 def project_autocomplete_choices(
     projects: list[dict[str, Any]],
     current: str,
@@ -434,11 +463,14 @@ def project_autocomplete_choices(
 
     ``value`` is the project **identifier** (stable for create/list APIs).
     ``label`` prefers the display **name**. Results are filtered by ``current``
-    against name and identifier; the preferred-prefix project is listed first.
+    against name and identifier, then sorted by leading number ascending
+    (``05_`` before ``10_`` before ``93_``; unnumbered last). A preferred-prefix
+    match (e.g. default ``05_``) is still listed first when present.
     """
     cur = (current or "").strip().casefold()
     prefer = (prefer_prefix or "").strip().casefold()
-    rows: list[tuple[int, str, str, str]] = []
+    # preferred(-1/0), leading_number, name_key, label, ident
+    rows: list[tuple[int, int, str, str, str]] = []
     for proj in projects:
         ident = str(proj.get("identifier") or "").strip()
         name = str(proj.get("name") or "").strip() or ident
@@ -453,11 +485,19 @@ def project_autocomplete_choices(
         label = name if name else ident
         if name and name.casefold() != ident.casefold():
             label = f"{name} ({ident})"
-        rows.append((preferred, name.casefold(), label[:100], ident[:100]))
-    rows.sort(key=lambda t: (t[0], t[1]))
+        rows.append(
+            (
+                preferred,
+                _project_leading_number(name, ident),
+                name.casefold(),
+                label[:100],
+                ident[:100],
+            )
+        )
+    rows.sort(key=lambda t: (t[0], t[1], t[2]))
     out: list[tuple[str, str]] = []
     seen: set[str] = set()
-    for _pref, _nk, label, ident in rows:
+    for _pref, _num, _nk, label, ident in rows:
         if ident in seen:
             continue
         seen.add(ident)

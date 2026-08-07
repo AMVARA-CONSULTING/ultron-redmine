@@ -91,9 +91,23 @@ def test_project_autocomplete_choices_prefer_05() -> None:
         {"id": 2, "identifier": "amvara-general", "name": "10_AMVARA"},
         {"id": 58, "identifier": "amvara_internal", "name": "05_AMVARA_internal"},
         {"id": 8, "identifier": "dip-re", "name": "93_DIP-RE"},
+        {"id": 9, "identifier": "no-num", "name": "Daimler ART"},
     ]
     pairs = project_autocomplete_choices(projects, "", prefer_prefix="05_")
-    assert pairs[0][1] == "amvara_internal"
+    assert [p[1] for p in pairs] == [
+        "amvara_internal",  # preferred + 05
+        "amvara-general",  # 10
+        "dip-re",  # 93
+        "no-num",  # unnumbered last
+    ]
+    # Without prefer boost, still ascending by leading number.
+    by_num = project_autocomplete_choices(projects, "", prefer_prefix="")
+    assert [p[1] for p in by_num] == [
+        "amvara_internal",
+        "amvara-general",
+        "dip-re",
+        "no-num",
+    ]
     filtered = project_autocomplete_choices(projects, "dip", prefer_prefix="05_")
     assert len(filtered) == 1
     assert filtered[0][1] == "dip-re"
