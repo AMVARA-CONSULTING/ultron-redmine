@@ -130,23 +130,30 @@ committer_changed_paths() {
   } | sort -u )
 }
 
-committer_paths_all_stamp_allowlist() {
-  local f had=0
-  while IFS= read -r f; do
-    [[ -z "$f" ]] && continue
-    had=1
-    case "$f" in
-      autoagents/001-redmine-reviewer/time-of-last-review.txt) ;;
-      autoagents/008-enhancement-reviewer/time-of-last-review.txt) ;;
-      *) return 1 ;;
-    esac
-  done < <(committer_changed_paths)
-  ((had == 1))
+# Local operational noise — never justifies invoking cursor-agent for committer.
+is_committer_noise_path() {
+  case "$1" in
+    autoagents/001-redmine-reviewer/time-of-last-review.txt) return 0 ;;
+    autoagents/008-enhancement-reviewer/time-of-last-review.txt) return 0 ;;
+    autoagents/logs|autoagents/logs/*) return 0 ;;
+    autoagents/.last-ultron-dump-sha) return 0 ;;
+    *) return 1 ;;
+  esac
 }
 
-# Reviewer time-of-last-review.txt files are local operational state for
-# preflight cadence. Never auto-commit or push stamp-only dirty trees
-# (keeps main free of 24/7 chore noise).
+# True when dirty/untracked paths include something other than reviewer stamps / loop logs.
+has_substantive_changes() {
+  local f
+  while IFS= read -r f; do
+    [[ -z "$f" ]] && continue
+    is_committer_noise_path "$f" && continue
+    return 0
+  done < <(committer_changed_paths)
+  return 1
+}
+
+# Reviewer stamps + loop logs are local operational state. Never auto-commit or
+# spawn cursor-agent for noise-only dirty trees (keeps main free of 24/7 chore spam).
 
 run_agent() {
   local desc="$1" cond="$2" prompt="$3" msg="$4"
@@ -314,15 +321,24 @@ step_closing_review() {
 }
 
 step_committer() {
-  has_uncommitted_changes || { echo "----- committer (skip: clean tree)"; return 0; }
-  sync_repo || return 0
-  has_uncommitted_changes || { echo "----- committer (skip after sync: clean)"; return 0; }
-  if committer_paths_all_stamp_allowlist; then
-    echo "----- committer (skip: only local reviewer stamps — not committing)"
+  # Prefer substantive check (stamps/logs alone must not spawn cursor-agent).
+  # Keep has_uncommitted_changes as a fast path when the index is fully clean
+  # and there are no untracked non-noise files either.
+  if ! has_uncommitted_changes && ! has_substantive_changes; then
+    echo "----- committer (skip: clean tree)"
     return 0
   fi
-  run_agent "committer" "has_uncommitted_changes" "040-committer.md" \
-    "Run 040-committer on main. Commit when ready; bump pyproject + __init__ version; push origin main. Do not commit stamp-only time-of-last-review.txt changes. Do not run ultron-dump.sh — the orchestrator does that after committer." "committer"
+  if ! has_substantive_changes; then
+    echo "----- committer (skip: only local noise — stamps/logs, not committing)"
+    return 0
+  fi
+  sync_repo || return 0
+  if ! has_substantive_changes; then
+    echo "----- committer (skip after sync: no substantive changes)"
+    return 0
+  fi
+  run_agent "committer" "has_substantive_changes" "040-committer.md" \
+    "Run 040-committer on main. Commit when ready; bump pyproject + __init__ version; push origin main. Do not commit stamp-only time-of-last-review.txt or autoagents/logs/. Do not run ultron-dump.sh — the orchestrator does that after committer." "committer"
 }
 
 ultron_runtime_diff_quiet() {
@@ -446,7 +462,7 @@ Usage: $(basename "$0") [COMMAND]
     handoff, 012      WIP → UNTESTED handoff
     tester            Tester
     closing-review    Closing reviewer
-    committer         Commit when tree dirty
+    committer         Commit when tree has substantive (non-noise) changes
     dump, ultron-dump Reinstall + systemctl restart when Ultron runtime paths changed
     shot, upgrade-shot  FEAT→handoff→tester→closing (used by Discord /upgrade)
 

@@ -82,6 +82,18 @@ Environment highlights:
 | `AGENT_INTAKE_REVIEWER_ALWAYS` | 0 | Force 001 cursor-agent every cycle |
 | `AGENT_ULTRON_DUMP` | 1 | After committer, run `ultron-dump.sh` when runtime paths changed |
 
+### When `cursor-agent` runs
+
+Idle cycles must not open Cursor sessions. Each step already gates on work:
+
+| Step | Invokes `cursor-agent` when… |
+|------|------------------------------|
+| 001 / 008 | Preflight reports signals (or `AGENT_*_ALWAYS=1`) |
+| feat → closing | Matching task files exist (`FEAT` / `NEW` / `WIP` / `UNTESTED` / `TESTING` / `CLOSED`) |
+| committer | Working tree has **substantive** changes — not only reviewer `time-of-last-review.txt` stamps or `autoagents/logs/` |
+
+`autoagents/logs/` is gitignored (orchestrator stdout). Stamp-only / log-only dirt never triggers the committer agent.
+
 ## Tracker updates
 
 - **Redmine:** agent 001 adds journal notes when queueing **FEAT-** tasks; coders/testers add notes on progress (no secrets).

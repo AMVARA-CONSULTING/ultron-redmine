@@ -42,7 +42,9 @@ Version bumps alone do not apply until dump/restart.
 - **`./scripts/git-sync-main.sh`** before **`git status`**.
 - Never commit **`.env`** or secrets.
 - Never commit **`autoagents/.last-ultron-dump-sha`** (local deploy stamp).
+- Never commit **`autoagents/logs/`** (orchestrator stdout; gitignored).
 - Never commit **only** **`autoagents/*/time-of-last-review.txt`** — those are local 24/7 loop stamps; leave them dirty or unstage them. Include them in a commit only when bundled with real task/code work (prefer leaving them out).
+- The orchestrator skips this agent when the only dirt is stamps/logs (noise). If you were invoked, assume there is substantive work to consider.
 
 ### Instructions
 
