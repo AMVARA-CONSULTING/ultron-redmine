@@ -104,6 +104,14 @@ def section_redmine(q: Any, state: WizardState) -> None:
             "find_issue_project (identifier, display name, or numeric id)",
             default=cur_proj,
         ).strip() or "10_AMVARA"
+    cur_nt = str(rm.get("new_ticket_default_project") or "05_").strip() or "05_"
+    print(f"redmine.new_ticket_default_project (default for /new_ticket): {cur_nt}\n")
+    if _yn(q, "Edit new_ticket_default_project (prefix/name/identifier for /new_ticket)?", default=False):
+        rm["new_ticket_default_project"] = _text(
+            q,
+            "new_ticket_default_project (e.g. 05_ or 05_AMVARA_internal)",
+            default=cur_nt,
+        ).strip() or "05_"
 
     if _yn(q, "Test connection to Redmine now?", default=bool(state.env_get("REDMINE_URL") and state.env_get("REDMINE_API_KEY"))):
         from ultron.redmine import RedmineClient, RedmineError

@@ -42,6 +42,17 @@ def test_parse_router_new_ticket_rejects_empty_fields() -> None:
     assert isinstance(out, NLParseError)
 
 
+def test_parse_router_new_ticket_project_optional() -> None:
+    raw = (
+        '{"kind":"invoke","command":"new_ticket",'
+        '"args":{"title":"[T] Hello","description":"Body text"}}'
+    )
+    out = parse_router_json_text(raw)
+    assert isinstance(out, NLInvoke)
+    assert out.command == "new_ticket"
+    assert out.args == {"title": "[T] Hello", "description": "Body text"}
+
+
 def test_create_new_ticket_unknown_project(monkeypatch) -> None:
     client = RedmineClient(base_url="https://redmine.example.com", api_key="x")
 
@@ -121,6 +132,39 @@ def test_create_new_ticket_permission_denied(monkeypatch) -> None:
     assert body is None
     assert iid == -1
     assert err == "denied"
+
+
+def test_create_new_ticket_default_prefix_05(monkeypatch) -> None:
+    client = RedmineClient(base_url="https://redmine.example.com", api_key="x")
+
+    async def _projects():
+        return [
+            {"id": 2, "identifier": "amvara-general", "name": "10_AMVARA"},
+            {"id": 58, "identifier": "amvara_internal", "name": "05_AMVARA_internal"},
+        ]
+
+    async def _create(*, project_id, subject, description):
+        assert project_id == 58
+        return {"id": 42, "subject": subject}
+
+    monkeypatch.setattr(client, "list_projects", _projects)
+    monkeypatch.setattr(client, "create_issue", _create)
+
+    async def _run():
+        return await create_new_ticket(
+            redmine=client,
+            project_query="",
+            title="[ULTRON] default proj",
+            description="body",
+            default_project_query="05_",
+        )
+
+    body, err, iid = asyncio.run(_run())
+    assert err is None
+    assert iid == 42
+    assert body is not None
+    assert "05" in body and "AMVARA" in body and "internal" in body
+    assert "amvara" in body.casefold()
 
 
 def test_create_issue_validates_empty_subject() -> None:

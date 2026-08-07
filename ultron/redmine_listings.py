@@ -365,6 +365,108 @@ class ResolvedRedmineProject:
     score: float
 
 
+def resolve_redmine_project_prefix(
+    prefix: str,
+    projects: list[dict[str, Any]],
+) -> ResolvedRedmineProject | None:
+    """Resolve by **name** or **identifier** prefix (case-insensitive).
+
+    Prefers a display-name prefix match over identifier. Among ties, picks the
+    lexicographically smallest name (stable for defaults like ``05_``).
+    """
+    p = (prefix or "").strip()
+    if not p or not projects:
+        return None
+    p_cf = p.casefold()
+    scored: list[tuple[int, str, dict[str, Any]]] = []
+    for proj in projects:
+        ident = str(proj.get("identifier") or "").strip()
+        name = str(proj.get("name") or "").strip()
+        if not ident:
+            continue
+        name_hit = bool(name) and name.casefold().startswith(p_cf)
+        ident_hit = ident.casefold().startswith(p_cf)
+        if not name_hit and not ident_hit:
+            continue
+        # Prefer name prefix (0) over identifier-only (1).
+        scored.append((0 if name_hit else 1, (name or ident).casefold(), proj))
+    if not scored:
+        return None
+    scored.sort(key=lambda t: (t[0], t[1]))
+    proj = scored[0][2]
+    ident = str(proj.get("identifier") or "").strip()
+    name = str(proj.get("name") or "").strip() or ident
+    try:
+        nid = int(proj.get("id"))
+    except (TypeError, ValueError):
+        return None
+    return ResolvedRedmineProject(
+        identifier=ident,
+        name=name,
+        numeric_id=nid,
+        exact=False,
+        score=0.85,
+    )
+
+
+def resolve_redmine_project_query(
+    query: str,
+    projects: list[dict[str, Any]],
+) -> ResolvedRedmineProject | None:
+    """Resolve a project query: exact/fuzzy first, then prefix (for defaults like ``05_``)."""
+    q = (query or "").strip()
+    if not q or not projects:
+        return None
+    matched = resolve_redmine_project(q, projects)
+    if matched is not None:
+        return matched
+    return resolve_redmine_project_prefix(q, projects)
+
+
+def project_autocomplete_choices(
+    projects: list[dict[str, Any]],
+    current: str,
+    *,
+    prefer_prefix: str = "",
+    limit: int = 25,
+) -> list[tuple[str, str]]:
+    """Build Discord autocomplete ``(label, value)`` pairs from Redmine projects.
+
+    ``value`` is the project **identifier** (stable for create/list APIs).
+    ``label`` prefers the display **name**. Results are filtered by ``current``
+    against name and identifier; the preferred-prefix project is listed first.
+    """
+    cur = (current or "").strip().casefold()
+    prefer = (prefer_prefix or "").strip().casefold()
+    rows: list[tuple[int, str, str, str]] = []
+    for proj in projects:
+        ident = str(proj.get("identifier") or "").strip()
+        name = str(proj.get("name") or "").strip() or ident
+        if not ident:
+            continue
+        hay = f"{name} {ident}".casefold()
+        if cur and cur not in hay and not name.casefold().startswith(cur) and not ident.casefold().startswith(cur):
+            continue
+        preferred = 0
+        if prefer and (name.casefold().startswith(prefer) or ident.casefold().startswith(prefer)):
+            preferred = -1
+        label = name if name else ident
+        if name and name.casefold() != ident.casefold():
+            label = f"{name} ({ident})"
+        rows.append((preferred, name.casefold(), label[:100], ident[:100]))
+    rows.sort(key=lambda t: (t[0], t[1]))
+    out: list[tuple[str, str]] = []
+    seen: set[str] = set()
+    for _pref, _nk, label, ident in rows:
+        if ident in seen:
+            continue
+        seen.add(ident)
+        out.append((label, ident))
+        if len(out) >= max(1, min(limit, 25)):
+            break
+    return out
+
+
 def resolve_redmine_project(
     query: str,
     projects: list[dict[str, Any]],
@@ -588,13 +690,16 @@ async def create_new_ticket(
     project_query: str,
     title: str,
     description: str,
+    default_project_query: str = "05_",
 ) -> tuple[str | None, str | None, int]:
     """Create a Redmine issue in a resolved project.
 
     Returns ``(body, error, issue_id)``. ``issue_id`` is ``-1`` on error.
-    Project must match an existing Redmine project (identifier or name; fuzzy ok).
+    Project must match an existing Redmine project (identifier, name, fuzzy, or
+    prefix — e.g. default ``05_`` → display name starting with ``05_``).
+    Empty ``project_query`` uses ``default_project_query``.
     """
-    q = (project_query or "").strip()
+    q = (project_query or "").strip() or (default_project_query or "").strip()
     if not q:
         return (
             None,
@@ -613,14 +718,14 @@ async def create_new_ticket(
     except RedmineError as e:
         return None, f"Redmine error: {e}", -1
 
-    matched = resolve_redmine_project(q, projects)
+    matched = resolve_redmine_project_query(q, projects)
     if matched is None:
         safe_q = escape_markdown(q)
         return (
             None,
             f"No Redmine project matching **{safe_q}**. "
-            "Choose an existing project **identifier** or display **name** "
-            "(e.g. `10_AMVARA`); the bot will not invent a project.",
+            "Choose an existing project from the **`project`** autocomplete "
+            "(identifier or display name); the bot will not invent a project.",
             -1,
         )
 

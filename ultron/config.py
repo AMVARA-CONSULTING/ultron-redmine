@@ -110,6 +110,8 @@ class RedmineConfig:
     time_summary_max_entries: int = 2000
     #: Default Redmine project for `/find_issue` (identifier, display name, or numeric id).
     find_issue_project: str = "10_AMVARA"
+    #: Default for `/new_ticket` when ``project`` is omitted (identifier, name, or prefix e.g. ``05_``).
+    new_ticket_default_project: str = "05_"
 
 
 @dataclass(frozen=True)
@@ -695,10 +697,12 @@ def load_config(path: Path) -> AppConfig:
             uid_map[lk] = int(v)
     tsm = max(50, min(5000, _int(rm_raw.get("time_summary_max_entries"), 2000)))
     find_proj = _str(rm_raw.get("find_issue_project"), "10_AMVARA")
+    new_ticket_proj = _str(rm_raw.get("new_ticket_default_project"), "05_")
     redmine_cfg = RedmineConfig(
         user_id_by_login=uid_map,
         time_summary_max_entries=tsm,
         find_issue_project=find_proj,
+        new_ticket_default_project=new_ticket_proj or "05_",
     )
 
     pi_raw = raw.get("pi") or {}

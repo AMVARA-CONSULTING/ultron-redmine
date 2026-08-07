@@ -48,6 +48,7 @@ from ultron.redmine_listings import (
     markdown_issues_by_status,
     markdown_top_tickets,
     markdown_unassigned_open_issues,
+    project_autocomplete_choices,
 )
 from ultron.report_schedule import build_reports_startup_message, run_report_schedule_entry
 from ultron.llm import (
@@ -388,7 +389,7 @@ _HELP_TEXT = (
 • `/list_unassigned_issues` — Unassigned open issues past the minimum age (`discord.unassigned_open`).
 • `/find_issue` `text` — Full-text search for issues in the default Redmine project (`redmine.find_issue_project`, default **10_AMVARA**; identifier or display name): subject, description, notes. Up to 20 titles (15 chars) + issue links; extras as issue-number links only.
 • `/top_tickets` `project` [`kind_filter`] [`limit`] — Top **open** issues in a project (fuzzy match on identifier or name). `kind_filter`: **priority** (default), **newests**, or **oldests**. `limit` default **10** (max 50).
-• `/new_ticket` `project` `title` `description` — Create a Redmine issue in an **existing** project (identifier or name; fuzzy match). Title and description are free text; other fields use Redmine defaults. **Confirm** before create. Reply includes a link to the new issue.
+• `/new_ticket` `title` `description` [`project`] — Create a Redmine issue. **`project`** is optional (autocomplete of live Redmine projects; default **`redmine.new_ticket_default_project`**, usually prefix **`05_`** → e.g. **05_AMVARA_internal**). Title and description are free text; other fields use Redmine defaults. **Confirm** before create. Reply includes a link to the new issue.
 • `/time_summary` `user` — Redmine **spent hours** for a user: **today**, **this week** (Mon–today), **last 7 days** (by **spent_on**), and **last 24 h** (by **created_on**). `user` = Redmine login, numeric id, or **`me`**. If login lookup fails (permissions), set **redmine.user_id_by_login** in `config.yaml`.
 • `/log_time` `issue_id` `hours` [`comments`] [`spent_on`] — Log spent hours (booked as the **Redmine API key** user). Optional **comments** and **spent_on** (YYYY-MM-DD). **Confirm** before write. See **REDMINE_TIME_ACTIVITY_ID** in `.env` when Redmine has several activities.
 • `/summary` `issue_id` [`llm_provider`] [`llm_model`] — Ticket summary (requires LLM). Optional provider/model: autocomplete when configured; omit for defaults.
@@ -483,6 +484,8 @@ def _nl_dispatch_status_line(command: str, args: dict[str, Any]) -> str:
         )
     if command == "new_ticket":
         proj = str(args.get("project", "")).strip().replace("\n", " ")
+        if not proj:
+            proj = "(default)"
         if len(proj) > 80:
             proj = proj[:79] + "…"
         title = str(args.get("title", "")).strip().replace("\n", " ")
@@ -902,6 +905,8 @@ def _format_show_config(app_cfg: AppConfig, env: EnvSettings) -> str:
         f"• **redmine.time_summary_max_entries:** {app_cfg.redmine.time_summary_max_entries}",
         f"• **redmine.find_issue_project:** {app_cfg.redmine.find_issue_project!r} "
         f"(default project for **`/find_issue`**; identifier or display name)",
+        f"• **redmine.new_ticket_default_project:** {app_cfg.redmine.new_ticket_default_project!r} "
+        f"(default for **`/new_ticket`** when project omitted; identifier, name, or prefix)",
         f"• **discord.ephemeral_default:** {app_cfg.discord.ephemeral_default}",
         f"• **discord.issue_metadata_header:** {app_cfg.discord.issue_metadata_header}",
         f"• **discord.new_issues:** status_name={ni.status_name!r} list_limit={ni.list_limit} "
@@ -1522,6 +1527,8 @@ class UltronBot(commands.Bot):
         self.llm = llm
         self._jobs_started = False
         self._ready_startup_logged = False
+        #: Short-lived cache for Discord project autocomplete (monotonic ts, projects).
+        self._redmine_projects_cache: tuple[float, list[dict[str, Any]]] | None = None
         #: Set on first ``on_ready`` for `/status` uptime (UTC).
         self._ready_at_utc: datetime | None = None
         #: UTC timestamps: last successful tick anchor per ``report_schedule`` index (see ``report_schedule_loop``).
@@ -1567,6 +1574,38 @@ class UltronBot(commands.Bot):
                 exc,
             )
             return ""
+
+    def _new_ticket_default_project(self) -> str:
+        return (self.app_cfg.redmine.new_ticket_default_project or "05_").strip() or "05_"
+
+    async def _cached_redmine_projects(self, *, max_age_seconds: float = 300.0) -> list[dict[str, Any]]:
+        """List Redmine projects with a short in-memory cache for slash autocomplete."""
+        now = time.monotonic()
+        cached = self._redmine_projects_cache
+        if cached is not None and (now - cached[0]) < max_age_seconds:
+            return cached[1]
+        projects = await self.redmine.list_projects()
+        self._redmine_projects_cache = (now, projects)
+        return projects
+
+    async def _autocomplete_redmine_project(
+        self,
+        interaction: discord.Interaction,
+        current: str,
+    ) -> list[app_commands.Choice[str]]:
+        """Live Redmine project autocomplete for `/new_ticket` (and similar)."""
+        prefer = self._new_ticket_default_project()
+        try:
+            projects = await self._cached_redmine_projects()
+        except Exception as exc:
+            logger.warning("project autocomplete: list_projects failed: %s", exc)
+            # Still offer the configured default so the user can proceed.
+            label = prefer[:100] or "05_"
+            return [app_commands.Choice(name=label, value=label)]
+        pairs = project_autocomplete_choices(projects, current, prefer_prefix=prefer)
+        if not pairs and prefer:
+            return [app_commands.Choice(name=prefer[:100], value=prefer[:100])]
+        return [app_commands.Choice(name=label, value=value) for label, value in pairs]
 
     async def _confirm_redmine_write(
         self,
@@ -2641,7 +2680,8 @@ class UltronBot(commands.Bot):
                 await _reply_chunked_to_message(message, body, edit_first=status_message)
                 return
             if cmd == "new_ticket":
-                project = str(args["project"])
+                default_proj = self._new_ticket_default_project()
+                project = str(args.get("project") or "").strip() or default_proj
                 title = str(args["title"])
                 description = str(args["description"])
                 confirm = await self._confirm_redmine_write(
@@ -2663,6 +2703,7 @@ class UltronBot(commands.Bot):
                     project_query=project,
                     title=title,
                     description=description,
+                    default_project_query=default_proj,
                 )
                 if err is not None:
                     await _err(err)
@@ -4627,21 +4668,23 @@ class UltronBot(commands.Bot):
 
         @self.tree.command(
             name="new_ticket",
-            description="Create a Redmine issue in an existing project (defaults for other fields).",
+            description="Create a Redmine issue (project optional; default from config, usually 05_).",
         )
         @app_commands.describe(
-            project="Redmine project identifier or name (must match an existing project)",
             title="Issue subject (e.g. [FOO] Bar)",
             description="Issue description body",
+            project="Redmine project (autocomplete). Default: redmine.new_ticket_default_project (05_).",
         )
+        @app_commands.autocomplete(project=self._autocomplete_redmine_project)
         async def new_ticket_cmd(
             interaction: discord.Interaction,
-            project: str,
             title: str,
             description: str,
+            project: str = self._new_ticket_default_project(),
         ) -> None:
             ephemeral = self.app_cfg.discord.ephemeral_default
-            proj = project.strip()
+            default_proj = self._new_ticket_default_project()
+            proj = (project or "").strip() or default_proj
             tit = title.strip()
             desc = description.strip()
             log_slash_input(
@@ -4652,10 +4695,11 @@ class UltronBot(commands.Bot):
                     f"title={_truncate_for_log(tit)!r} description_len={len(desc)}"
                 ),
             )
-            if not proj or not tit or not desc:
+            if not tit or not desc:
                 await interaction.response.send_message(
-                    "Pass **`project`**, **`title`**, and **`description`** "
-                    "(all required; project must exist in Redmine).",
+                    "Pass **`title`** and **`description`** "
+                    "(required). **`project`** is optional — default "
+                    f"**`{escape_markdown(default_proj)}`**.",
                     ephemeral=True,
                 )
                 log_slash_output("new_ticket", interaction, action="missing required parameter")
@@ -4688,6 +4732,7 @@ class UltronBot(commands.Bot):
                 project_query=proj,
                 title=tit,
                 description=desc,
+                default_project_query=default_proj,
             )
             if err is not None:
                 await interaction.followup.send(err, ephemeral=ephemeral)

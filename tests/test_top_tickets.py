@@ -8,7 +8,10 @@ from ultron.redmine_listings import (
     clamp_top_tickets_limit,
     markdown_top_tickets,
     normalize_top_tickets_kind,
+    project_autocomplete_choices,
     resolve_redmine_project,
+    resolve_redmine_project_prefix,
+    resolve_redmine_project_query,
 )
 
 
@@ -66,6 +69,34 @@ def test_resolve_redmine_project_fuzzy() -> None:
     assert matched.identifier == "dip-re"
 
     assert resolve_redmine_project("zzzz-nope", projects) is None
+
+
+def test_resolve_redmine_project_prefix_05() -> None:
+    projects = [
+        {"id": 2, "identifier": "amvara-general", "name": "10_AMVARA"},
+        {"id": 58, "identifier": "amvara_internal", "name": "05_AMVARA_internal"},
+    ]
+    matched = resolve_redmine_project_prefix("05_", projects)
+    assert matched is not None
+    assert matched.identifier == "amvara_internal"
+    assert matched.name == "05_AMVARA_internal"
+
+    via_query = resolve_redmine_project_query("05_", projects)
+    assert via_query is not None
+    assert via_query.identifier == "amvara_internal"
+
+
+def test_project_autocomplete_choices_prefer_05() -> None:
+    projects = [
+        {"id": 2, "identifier": "amvara-general", "name": "10_AMVARA"},
+        {"id": 58, "identifier": "amvara_internal", "name": "05_AMVARA_internal"},
+        {"id": 8, "identifier": "dip-re", "name": "93_DIP-RE"},
+    ]
+    pairs = project_autocomplete_choices(projects, "", prefer_prefix="05_")
+    assert pairs[0][1] == "amvara_internal"
+    filtered = project_autocomplete_choices(projects, "dip", prefer_prefix="05_")
+    assert len(filtered) == 1
+    assert filtered[0][1] == "dip-re"
 
 
 def test_parse_router_invoke_top_tickets_defaults() -> None:

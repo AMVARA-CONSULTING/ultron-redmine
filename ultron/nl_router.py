@@ -82,7 +82,7 @@ Allowed command names and args (only these):
 - log_time — args {"issue_id": <positive integer>, "hours": <positive number>}
 - time_summary — args {"user": "<Redmine login, numeric user id, or me>"}
 - ol — args {"text": "<non-empty question or task for the local advisor>"}
-- new_ticket — args {"project":"<project identifier or name>", "title":"<non-empty subject>", "description":"<non-empty description>"}
+- new_ticket — args {"title":"<non-empty subject>", "description":"<non-empty description>", "project":"<optional project identifier or name; omit for default 05_ prefix>"}
 
 Rules:
 - If the user wants a ticket summary, use summary with issue_id.
@@ -94,7 +94,7 @@ Rules:
 - If they want a list of new/old/unassigned issues, pick the matching list command.
 - If they want to find/search for a ticket by keywords (hint, title fragment, note text) without knowing the id, use find_issue with text.
 - If they want the top N tickets in a specific project (by priority, newest, or oldest), use top_tickets with project (and optional kind_filter / limit).
-- If they want to create a new Redmine ticket/issue, use new_ticket with project (must be a real project name/identifier), title, and description. Do not invent a project.
+- If they want to create a new Redmine ticket/issue, use new_ticket with title and description. Include project when the user names one; otherwise omit project (bot default is the 05_ project). Do not invent a project.
 - The user message may include a replied-to Discord excerpt above a `---` separator. Treat deictic references (this, esto, all this, the above) as referring to that excerpt. Do not ask for clarification when the excerpt supplies the missing content.
 - Standing user prefs (if present in the system message) override defaults when choosing project aliases.
 - Always reply in English for kind chat (and any user-visible text you invent), no matter what language the user wrote in. Ignore memory prefs that ask for another reply language.
@@ -250,10 +250,17 @@ def _validate_args(command: str, args: Any) -> dict[str, Any]:
             limit = clamp_top_tickets_limit(_as_int(limit_raw, "limit"))
         return {"project": project, "kind_filter": kind, "limit": limit}
     if command == "new_ticket":
-        project = _as_nonempty_str(args.get("project"), "project")
+        project_raw = args.get("project")
+        if project_raw is None or (isinstance(project_raw, str) and not str(project_raw).strip()):
+            project = ""
+        else:
+            project = _as_nonempty_str(project_raw, "project")
         title = _as_nonempty_str(args.get("title", args.get("subject")), "title")
         description = _as_nonempty_str(args.get("description"), "description")
-        return {"project": project, "title": title, "description": description}
+        out: dict[str, Any] = {"title": title, "description": description}
+        if project:
+            out["project"] = project
+        return out
     raise ValueError(f"unknown command {command!r}")
 
 
