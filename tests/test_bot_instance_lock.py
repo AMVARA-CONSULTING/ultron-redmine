@@ -49,14 +49,13 @@ def test_second_process_cannot_acquire_while_first_holds_lock(tmp_path: Path) ->
         cwd=str(repo_root),
         env=env,
         stdout=subprocess.DEVNULL,
-        stderr=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
     )
     try:
         time.sleep(0.5)
         with pytest.raises(RuntimeError, match="Another Ultron bot already holds"):
             acquire(tmp_path)
     finally:
-        proc.wait(timeout=10)
-        err = proc.stderr.read() if proc.stderr else b""
-        if proc.returncode != 0 and err:
-            raise AssertionError(err.decode(errors="replace")) from None
+        rc = proc.wait(timeout=10)
+        if rc != 0:
+            raise AssertionError(f"hold script exited with {rc}") from None
