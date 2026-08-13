@@ -37,6 +37,7 @@ ultron doctor
 - [ ] **`/status`** — version line matches the release (`vX.Y.Z` from `pyproject.toml` / `__version__`).
 - [ ] Durable memory: **`/remember`** a harmless key → **`/memory`** lists it → **`/forget`** removes it.
 - [ ] One write Confirm/Cancel path: e.g. **`/log_time`** (or **`/new_ticket`**) → **Confirm** writes; repeat and **Cancel** aborts with no write. **`/note`** should post without Confirm.
+- [ ] **`/new_ticket`** with **`project` omitted** (or cleared) → Confirm preview targets the configured **`05_`**-style default (`redmine.new_ticket_default_project`); **Cancel** (no write) or Confirm only on a safe test.
 - [ ] For Ultron **3.0** releases: also run the fuller **Manual Discord smoke** checklist in [OPERATIONS.md](OPERATIONS.md) (NL fast-path summarize, Watching presence, etc.).
 
 ## 5. Git tag (optional)

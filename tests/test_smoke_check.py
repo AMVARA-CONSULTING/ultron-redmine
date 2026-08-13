@@ -128,4 +128,5 @@ def test_check_ultron30_offline(capsys) -> None:
     assert "OK user_memory:" in out
     assert "OK nl_fastpath:" in out
     assert "OK write_confirm:" in out
+    assert "OK new_ticket_project:" in out
     assert "FAIL" not in out

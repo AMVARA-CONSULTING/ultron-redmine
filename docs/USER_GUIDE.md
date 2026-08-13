@@ -24,7 +24,7 @@ This document is for **people who use the bot in Discord**, not for server opera
 | **`/help`** | Lists commands and who may use them (everyone). |
 | **`/ping`** | Quick connectivity check (allowlisted users). |
 | **`/status`** | Bot summary: version, uptime, latency, Redmine host, LLM, NL routing, durable memory file count, reports (allowlisted). |
-| **`/find_issue`** | Full-text search for issues in the default Redmine project (allowlisted). |
+| **`/find_issue`** | Full-text search for issues in the default Redmine project (**10_AMVARA**, or whatever the operator set as **`find_issue_project`**) (allowlisted). |
 | **`/top_tickets`** | Top **open** issues in a project by priority (default), newest, or oldest (allowlisted). |
 | **`/new_ticket`** | Create a Redmine issue — **`project`** optional (autocomplete; default **`05_`** → e.g. **05_AMVARA_internal**). **Confirm** before write (allowlisted). |
 | **`/issues_by_status`** | List issues in a Redmine status you name (allowlisted; same age/limit rules as new-issue listings). |

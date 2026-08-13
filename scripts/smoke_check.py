@@ -6,8 +6,8 @@ Run from repo root::
     python scripts/smoke_check.py
 
 Always runs offline checks (version ≥ 3.0.0, ``UserMemoryStore``, NL fast-path,
-write-confirm helpers, Watching presence name). Optionally probes Redmine/LLM when
-``.env`` has credentials.
+write-confirm helpers, Watching presence name, new_ticket project resolve /
+autocomplete sort). Optionally probes Redmine/LLM when ``.env`` has credentials.
 """
 from __future__ import annotations
 
@@ -50,6 +50,10 @@ def check_ultron30_offline() -> bool:
         from ultron.bot import watching_presence_name
         from ultron.nl_fastpath import NLInvoke, NLMemoryUpdate, try_nl_fastpath
         from ultron.user_memory import UserMemoryStore
+        from ultron.redmine_listings import (
+            project_autocomplete_choices,
+            resolve_redmine_project_query,
+        )
         from ultron.write_confirm import (
             ConfirmResult,
             author_may_confirm,
@@ -132,6 +136,26 @@ def check_ultron30_offline() -> bool:
         print("OK write_confirm: prompt + author check + abort copy")
     except Exception as e:
         print(f"FAIL write_confirm: {e}")
+        ok = False
+
+    try:
+        projects = [
+            {"id": 2, "identifier": "amvara-general", "name": "10_AMVARA"},
+            {"id": 58, "identifier": "amvara_internal", "name": "05_AMVARA_internal"},
+            {"id": 8, "identifier": "dip-re", "name": "93_DIP-RE"},
+        ]
+        matched = resolve_redmine_project_query("05_", projects)
+        if matched is None or matched.identifier != "amvara_internal":
+            raise AssertionError(f"05_ prefix should resolve to amvara_internal, got {matched!r}")
+        by_num = project_autocomplete_choices(projects, "", prefer_prefix="")
+        if [p[1] for p in by_num] != ["amvara_internal", "amvara-general", "dip-re"]:
+            raise AssertionError(f"leading-number sort failed: {by_num!r}")
+        preferred = project_autocomplete_choices(projects, "", prefer_prefix="05_")
+        if not preferred or preferred[0][1] != "amvara_internal":
+            raise AssertionError(f"prefer 05_ should list amvara_internal first: {preferred!r}")
+        print("OK new_ticket_project: 05_ resolve + autocomplete sort")
+    except Exception as e:
+        print(f"FAIL new_ticket_project: {e}")
         ok = False
 
     return ok
