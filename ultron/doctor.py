@@ -62,6 +62,14 @@ def run_doctor() -> int:
         return 1
 
     print("Config: OK (read and parse)")
+    print(
+        f"  redmine.find_issue_project: {app_cfg.redmine.find_issue_project!r} "
+        "(default for /find_issue)"
+    )
+    print(
+        f"  redmine.new_ticket_default_project: {app_cfg.redmine.new_ticket_default_project!r} "
+        "(default when /new_ticket omits project)"
+    )
 
     try:
         env = load_env(require_discord=False, require_redmine=False)

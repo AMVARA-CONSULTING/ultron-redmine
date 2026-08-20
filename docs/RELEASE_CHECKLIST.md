@@ -18,8 +18,8 @@ python -m pytest tests/ -q
 
 ## 3. Optional smoke checks
 
-- [ ] Run **[`scripts/smoke_check.py`](../scripts/smoke_check.py)** (no Discord required). Offline Ultron **3.0** lines (**OK version**, **OK watching_presence**, **OK user_memory**, **OK nl_fastpath**, **OK write_confirm**) must pass; Redmine/LLM may SKIP without credentials.
-- [ ] Run **`ultron doctor`** (or **`python -m ultron doctor`**) — same entry as `[project.scripts]` `ultron` — and confirm paths, bindings, Redmine, and LLM health lines look sane.
+- [ ] Run **[`scripts/smoke_check.py`](../scripts/smoke_check.py)** (no Discord required). Offline Ultron **3.0** lines (**OK version**, **OK watching_presence**, **OK user_memory**, **OK nl_fastpath**, **OK write_confirm**, **OK new_ticket_project**) must pass; Redmine/LLM may SKIP without credentials.
+- [ ] Run **`ultron doctor`** (or **`python -m ultron doctor`**) — same entry as `[project.scripts]` `ultron` — and confirm paths, Redmine project defaults (`find_issue_project` / `new_ticket_default_project`), bindings, Redmine, and LLM health lines look sane.
 
 ```bash
 python scripts/smoke_check.py

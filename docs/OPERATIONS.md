@@ -193,7 +193,7 @@ Agent logs: **`data/self-upgrade/`** under **`ULTRON_STATE_DIR`**.
 ## Health checks
 
 - **Startup:** Log lines include Redmine OK / LLM backend (or none). Optional line to `registration_log` when enabled.
-- **`ultron doctor`:** After `state_dir`, prints a read-only **User memory** block (dir present/writable, free disk vs growth floor, `user_*.json` count — no entry contents). Does not create memory files.
+- **`ultron doctor`:** After config parse, prints effective **`redmine.find_issue_project`** and **`redmine.new_ticket_default_project`**. After `state_dir`, prints a read-only **User memory** block (dir present/writable, free disk vs growth floor, `user_*.json` count — no entry contents). Does not create memory files.
 - **Smoke script (no Discord):** [`scripts/smoke_check.py`](../scripts/smoke_check.py) — always runs offline Ultron **3.0** checks (version ≥ 3.0.0, Watching presence name, `UserMemoryStore`, NL fast-path, write-confirm helpers, new_ticket project resolve / autocomplete sort), then optional Redmine/LLM connectivity from `.env`. Unwraps the cursor-agent LLM fallback wrapper (same as `ultron doctor`) so the chain primary is pinged.
 
 ```bash

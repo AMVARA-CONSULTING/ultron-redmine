@@ -33,6 +33,48 @@ def test_doctor_ok_without_discord_redmine_or_llm(monkeypatch: pytest.MonkeyPatc
     assert run_doctor() == 0
 
 
+def test_doctor_shows_redmine_project_defaults(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    cfg = tmp_path / "c.yaml"
+    cfg.write_text(_MINIMAL, encoding="utf-8")
+    monkeypatch.setenv("CONFIG_PATH", str(cfg))
+    for k in ("DISCORD_TOKEN", "REDMINE_URL", "REDMINE_API_KEY", "LLM_API_KEY"):
+        monkeypatch.delenv(k, raising=False)
+
+    from ultron.doctor import run_doctor
+
+    assert run_doctor() == 0
+    out = capsys.readouterr().out
+    assert "redmine.find_issue_project: '10_AMVARA'" in out
+    assert "redmine.new_ticket_default_project: '05_'" in out
+
+
+def test_doctor_shows_overridden_redmine_project_defaults(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    cfg = tmp_path / "c.yaml"
+    cfg.write_text(
+        _MINIMAL
+        + """\
+redmine:
+  find_issue_project: amvara-general
+  new_ticket_default_project: 05_AMVARA_internal
+""",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("CONFIG_PATH", str(cfg))
+    for k in ("DISCORD_TOKEN", "REDMINE_URL", "REDMINE_API_KEY", "LLM_API_KEY"):
+        monkeypatch.delenv(k, raising=False)
+
+    from ultron.doctor import run_doctor
+
+    assert run_doctor() == 0
+    out = capsys.readouterr().out
+    assert "redmine.find_issue_project: 'amvara-general'" in out
+    assert "redmine.new_ticket_default_project: '05_AMVARA_internal'" in out
+
+
 def test_doctor_reports_user_memory_health(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
