@@ -167,17 +167,20 @@ Session logs: **`data/pi/`** and **`data/cursor-agent/`** under **`ULTRON_STATE_
 
 | Feature | Access | Behavior |
 |---------|--------|----------|
-| **`/upgrade text`** | Bot admins | **cursor-agent** edits the Ultron checkout; verify + **`systemctl restart --no-block`** on success |
-| **Self-repair** | Automatic | On likely **code bugs** in slash handlers (30 min cooldown); same pipeline as `/upgrade` |
+| **`/upgrade text`** | Bot admins | Creates a **`FEAT-*`** task under **`autoagents/tasks/`**, runs **`AGENT_GIT_SYNC=0 ./autoagents/ultron-agent-loop.sh shot`** (feat → handoff → tester → closing), then verify + dump + Redmine **#7406** journal note + **`systemctl restart --no-block`** on success |
+| **Self-repair** | Automatic | On likely **code bugs** in slash handlers (30 min cooldown); **same pipeline** as `/upgrade` (FEAT + shot → dump → Redmine note → restart) |
 | **Feedback** | N/A | Reports posted to **`reports.channel_id`** (same channel as scheduled summaries) |
+
+Details of the one-shot pipeline: **[agent-loop.md — Discord `/upgrade`](agent-loop.md#discord-upgrade-one-shot)**. The Autoagents section below is the full loop; `/upgrade` is **not** a bare cursor-agent edit of the checkout.
 
 Env vars (see [`.env.example`](../.env.example)):
 
-- **`ULTRON_PROJECT_ROOT`** — cursor-agent workspace (default: repository root)
+- **`ULTRON_PROJECT_ROOT`** — checkout root for the autoagents shot (default: repository root)
 - **`ULTRON_SYSTEMD_UNIT`** — default `ultron.service`
-- **`ULTRON_SELF_UPGRADE_TIMEOUT_SECONDS`** — default `1800`
+- **`ULTRON_SELF_UPGRADE_TIMEOUT_SECONDS`** — autoagents shot timeout (default `1800`)
+- **`ULTRON_UPGRADE_REDMINE_ISSUE`** — Redmine issue for journal reports (default `7406`)
 - **`ULTRON_SELF_REPAIR_ENABLED`** — default on
-- **`cursor_agent.enabled`** must be true for `/upgrade`
+- **`cursor_agent.enabled`** must be true for `/upgrade` (shot agents need the CLI)
 
 After a successful `/upgrade`, Ultron calls **`bot.close()`** and systemd replaces the process. Manual fallback: [`scripts/ultron-dump.sh`](../scripts/ultron-dump.sh).
 
