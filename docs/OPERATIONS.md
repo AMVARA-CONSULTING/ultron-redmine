@@ -201,7 +201,7 @@ Agent logs: **`data/self-upgrade/`** under **`ULTRON_STATE_DIR`**.
 - **Smoke script (no Discord):** [`scripts/smoke_check.py`](../scripts/smoke_check.py) — always runs offline Ultron **3.0** checks (version ≥ 3.0.0, Watching presence name, `UserMemoryStore`, NL fast-path, write-confirm helpers, new_ticket project resolve / autocomplete sort), then optional Redmine/LLM connectivity from `.env`. Unwraps the cursor-agent LLM fallback wrapper (same as `ultron doctor`) so the chain primary is pinged.
 
 ```bash
-python scripts/smoke_check.py
+.venv/bin/python scripts/smoke_check.py
 # Expect: OK version / OK watching_presence / OK user_memory / OK nl_fastpath / OK write_confirm / OK new_ticket_project
 # Plus OK or SKIP for Redmine and LLM depending on .env
 ```

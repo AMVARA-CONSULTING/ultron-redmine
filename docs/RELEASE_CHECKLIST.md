@@ -13,18 +13,18 @@ Use this list before tagging or publishing a release. It is the project’s expl
 - [ ] Run **`pytest`** from the repository root (install dev deps: `pip install -e ".[dev]"`).
 
 ```bash
-python -m pytest tests/ -q
+.venv/bin/pytest tests/ -q
 ```
 
 ## 3. Optional smoke checks
 
 - [ ] Run **[`scripts/smoke_check.py`](../scripts/smoke_check.py)** (no Discord required). Offline Ultron **3.0** lines (**OK version**, **OK watching_presence**, **OK user_memory**, **OK nl_fastpath**, **OK write_confirm**, **OK new_ticket_project**) must pass; Redmine/LLM may SKIP without credentials.
-- [ ] Run **`ultron doctor`** (or **`python -m ultron doctor`**) — same entry as `[project.scripts]` `ultron` — and confirm paths, Redmine project defaults (`find_issue_project` / `new_ticket_default_project`), bindings, Redmine, and LLM health lines look sane.
+- [ ] Run **`ultron doctor`** (or **`.venv/bin/python -m ultron doctor`**) — same entry as `[project.scripts]` `ultron` — and confirm paths, Redmine project defaults (`find_issue_project` / `new_ticket_default_project`), bindings, Redmine, and LLM health lines look sane.
 
 ```bash
-python scripts/smoke_check.py
+.venv/bin/python scripts/smoke_check.py
 ultron doctor
-# or: python -m ultron doctor
+# or: .venv/bin/python -m ultron doctor
 ```
 
 - [ ] If the **wizard** extra is installed, run **`ultron wizard`** once and confirm the main menu loads (`pip install -e ".[wizard]"`).
