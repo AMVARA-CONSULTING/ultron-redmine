@@ -60,7 +60,7 @@ Commands that **create tickets** or **log time** show a short preview and **Conf
 - **`/new_ticket`**
 - **`/log_time`**
 
-**`/note`** (and @mention “add a note…”) posts immediately after LLM polish — no Confirm step.
+**`/note`** (and @mention “add a note…”) posts immediately after LLM polish — no Confirm step. Notes land in Redmine as **Textile**-friendly text (not Discord Markdown).
 
 Only the user who started the action can press the buttons. **Cancel** or timeout means **nothing was written**. Read-only commands (`/summary`, `/ask_issue`, listings, memory) do not ask for Confirm.
 

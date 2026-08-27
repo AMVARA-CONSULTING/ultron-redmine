@@ -62,6 +62,7 @@ Memory is loaded once per call via `_user_memory_block` / `format_for_prompt` an
 
 - Startup calls **`RedmineClient.verify_connection()`** → `GET /users/current.json` (see [`ultron/redmine.py`](../ultron/redmine.py)). Failure aborts startup.
 - API key is sent as **`X-Redmine-API-Key`**.
+- **Journal format:** Notes from **`/note`**, compound @mention “add a note…”, and **`/upgrade`** / self-repair Redmine reports are written as **Textile** (via [`ultron/redmine_textile.py`](../ultron/redmine_textile.py)), not Markdown. Discord replies stay Markdown.
 - **Project defaults** (under **`redmine:`** in `config.yaml`; see [`config.example.yaml`](../config.example.yaml) and the wizard):
   - **`find_issue_project`** — Default project for **`/find_issue`**. Prefer a Redmine **identifier**, or a value that resolves via `list_projects` (display **name**, numeric **id**, or **prefix**). Empty/null → **10_AMVARA**. Using a display name as a raw URL path segment can 404; Ultron resolves name/prefix to the identifier before calling search.
   - **`new_ticket_default_project`** — Used when **`/new_ticket`** omits **`project`**. Same resolution rules (identifier, name, or prefix — e.g. **`05_`** → **05_AMVARA_internal**). Empty/null → **`05_`**.
@@ -212,7 +213,7 @@ Run on a host with the live bot (e.g. amvara4) after dump/restart. Use a **white
 4. **`@Ultron summarize #<known-issue>`** — fast-path should skip a long “routing…” LLM delay when the intent is obvious; summary returns.
 5. **`/log_time`** on a safe test issue with tiny hours → **Confirm** → time logged; repeat and **Cancel** → no new entry.
 6. **`/new_ticket`** with **`project` omitted** (or cleared) → Confirm preview targets the configured default (usually **`05_`** → e.g. **05_AMVARA_internal**); then **Cancel** (no write) or **Confirm** only on a safe test.
-7. **`/note`** on a safe test issue → note appears in the journal **without** a Confirm prompt (preview in Discord reply only).
+7. **`/note`** on a safe test issue → note appears in the journal **without** a Confirm prompt (preview in Discord reply only); journal body is **Textile**-friendly (no literal `**` / Markdown fences).
 8. **`/forget`** `preferred_project` → gone from **`/memory`**.
 
 Also covered in [USER_GUIDE.md](USER_GUIDE.md) (Durable memory / Write confirmation).
