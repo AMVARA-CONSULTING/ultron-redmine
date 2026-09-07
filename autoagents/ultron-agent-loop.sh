@@ -137,6 +137,8 @@ is_committer_noise_path() {
     autoagents/008-enhancement-reviewer/time-of-last-review.txt) return 0 ;;
     autoagents/logs|autoagents/logs/*) return 0 ;;
     autoagents/.last-ultron-dump-sha) return 0 ;;
+    autoagents/.runtime-loop.pid) return 0 ;;
+    autoagents/ultron-agent-loop.sh.bak|autoagents/ultron-agent-loop.sh.bak.*) return 0 ;;
     *) return 1 ;;
   esac
 }
@@ -232,6 +234,18 @@ prepare_008_preflight_context() {
   fi
 }
 
+
+append_008_attempt_stamp() {
+  # When cursor-agent fails (usage limit / timeout), 008 never writes its stamp and
+  # G008_WEEKLY_DUE stays true → spawn every sleep cycle. Record the attempt locally.
+  local summary="${1:-cursor_attempt}"
+  local utc
+  utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+  mkdir -p "$(dirname "$ENH_REVIEW_FILE")"
+  printf '%s tasks=0 signals=loop_attempt summary=%s\n' "$utc" "$summary" >>"$ENH_REVIEW_FILE"
+  echo "----- 008 stamp appended (attempt): $utc $summary"
+}
+
 should_run_008_cursor_agent() {
   [[ "${AGENT_ENHANCEMENT_REVIEWER_ALWAYS:-0}" == "1" ]] && return 0
   [[ "${AGENT_008_SKIP_PREFLIGHT:-0}" == "1" ]] && return 0
@@ -278,6 +292,8 @@ step_enhancement_reviewer() {
     local msg="Run 008: Read digest: $ctx
 Follow 008-enhancement-reviewer.md — up to 3 FEAT-0 / NEW-0 tasks. TASKS-README.md."
     run_agent "enhancement reviewer (008)" "true" "008-enhancement-reviewer.md" "$msg" "enhancement"
+    # Always stamp after an attempt so usage-limit / failed cursor cannot re-fire weekly every cycle.
+    append_008_attempt_stamp "after_cursor_agent"
     ENHANCEMENT_PREFLIGHT_READONLY=0 bash "$ENH_PREFLIGHT" "$ctx" >/dev/null 2>&1 || true
   else
     echo "----- enhancement (008) (skip: weekly not due and no signals; days=${G008_DAYS_SINCE_LAST_REVIEW:-?})"
