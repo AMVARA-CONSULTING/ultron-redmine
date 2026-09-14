@@ -159,6 +159,8 @@ Configure under **`amvara:`** in `config.yaml` (see **`config.example.yaml`**):
 
 **cursor-agent** install: enable **`cursor_agent.enabled`**, put the CLI on PATH (`~/.local/bin/cursor-agent`), or set **`ULTRON_CURSOR_AGENT_BIN`**.
 
+**pi** binary: after `npm install` in the Ultron checkout (`node_modules/.bin/pi`), or set **`ULTRON_PI_BIN`** / **`pi.bin_path`**. Resolution order: **`ULTRON_PI_BIN`** → **`pi.bin_path`** → **`node_modules/.bin/pi`**.
+
 **Compound @mentions** (audit + Redmine note): e.g. “connect to amvara3, check journal, add summary to issue 7001” — prefilter detects both signals, **`nl_planner`** returns a validated multi-step plan, steps run sequentially. If the planner LLM is unavailable and a host is known, Ultron runs the Amvara audit path (pi→CA) instead of failing the whole message.
 
 Session logs: **`data/pi/`** and **`data/cursor-agent/`** under **`ULTRON_STATE_DIR`**.

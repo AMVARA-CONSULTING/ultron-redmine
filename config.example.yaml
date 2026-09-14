@@ -175,6 +175,8 @@ llm_chain: []
 # pi — `/pi` slash command (bot admins only): pi.dev coding agent with Ollama on the Ultron checkout.
 # Requires `npm install` in the repo (`@earendil-works/pi-coding-agent`) and an Ollama-like `llm_chain` entry.
 # Also used for Amvara `/audit` (pi first). When Ollama is busy/unreachable, Amvara falls back to cursor-agent.
+# bin_path — Optional path to the pi binary (absolute or relative to the Ultron checkout). Empty: use ULTRON_PI_BIN, else node_modules/.bin/pi after npm install.
+# Example: ""
 # ollama_busy_check — If true, probe readiness before long pi work (Amvara skip-to-CA; `/pi` fail-fast).
 # Example: true
 # ollama_busy_if_models_loaded — If true with busy_check, treat any `/api/ps` loaded model as busy (aggressive).
@@ -184,6 +186,7 @@ llm_chain: []
 # Example:
 # pi:
 #   enabled: true
+#   bin_path: ""
 #   workspace: ""
 #   model: ""
 #   timeout_seconds: 900
