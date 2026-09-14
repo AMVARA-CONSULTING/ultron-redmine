@@ -78,7 +78,7 @@ For operators verifying Ultron **3.0** on a live guild (full checklist with expe
 ## Whitelist vs bot admins
 
 - **Whitelist** — Users who may use Redmine-related slash commands (`/summary`, `/ask_issue`, `/note`, `/ol`, `/audit`, `/ca`, `/list_new_issues`, `/list_unassigned_issues`, `/find_issue`, etc.) as configured by your team.
-- **Bot admins** — Users who may **`/approve`** and **`/remove`** whitelist entries. They are a smaller group.
+- **Bot admins** — Users who may **`/approve`**, **`/remove`**, **`/show_config`**, **`/pi`**, and **`/upgrade`**. They are a smaller group.
 
 If a command says you are not allowed, follow your organization’s process (often **`/token`** + admin approval). Optional **`BOT_OWNER_CONTACT`** in the bot configuration may point you to who can help.
 
