@@ -27,7 +27,9 @@ This document is for **people who use the bot in Discord**, not for server opera
 | **`/find_issue`** | Full-text search for issues in the default Redmine project (**10_AMVARA**, or whatever the operator set as **`find_issue_project`**) (allowlisted). |
 | **`/top_tickets`** | Top **open** issues in a project by priority (default), newest, or oldest (allowlisted). |
 | **`/new_ticket`** | Create a Redmine issue — **`project`** optional (autocomplete; default **`05_`** → e.g. **05_AMVARA_internal**). **Confirm** before write (allowlisted). |
+| **`/list_new_issues`** | Issues in the configured “new” status past the minimum age (limits from `discord.new_issues` on the host). |
 | **`/issues_by_status`** | List issues in a Redmine status you name (allowlisted; same age/limit rules as new-issue listings). |
+| **`/list_unassigned_issues`** | Unassigned open issues past the minimum age (`discord.unassigned_open` on the host). |
 | **`/time_summary`** | Spent-hours totals for a Redmine user (`me`, login, or id) (allowlisted). |
 | **`/log_time`** | Log spent hours on an issue — **Confirm** before write (allowlisted). |
 | **`/remember`** / **`/forget`** / **`/memory`** | Durable personal prefs (injected into NL/LLM prompts; disk-space checked before growth). |

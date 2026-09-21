@@ -75,6 +75,15 @@ Memory is loaded once per call via `_user_memory_block` / `format_for_prompt` an
 - **`DISCORD_GUILD_ID`** — On startup, Ultron **syncs slash commands to this guild** (instant updates for members in that server), then **syncs globally** so the same definitions apply in DMs and other guilds (Discord may take up to ~1 hour for the global side). If **unset or empty**, the default guild id is **788074756044750891**. Set **`0`** or **`global`** for **global-only** sync (no guild-specific copy). If **`/summary`** (or similar) still shows only **`issue_id`**, confirm you are testing **inside the configured guild** and check startup logs for `Registered LLM slash command variant` and sync lines; optional LLM parameters are easy to miss in the client UI (scroll the slash form).
 - **`DISCORD_ADMIN_IDS`** — Merged with `admins.json` under `ULTRON_STATE_DIR` for admin slash commands: `/approve`, `/remove`, `/show_config`, `/pi`, and `/upgrade` (see [Self-upgrade, self-repair, and feedback](#self-upgrade-self-repair-and-feedback) below for `/pi` and `/upgrade`).
 
+### Whitelist / approve
+
+Users request access with Discord **`/token`** (DM). Admins approve either in Discord or on the host:
+
+- **Discord:** **`/approve`** `token` (admin-only).
+- **Host CLI:** from the Ultron checkout / venv, run **`ultron add token '<token>'`** ([`ultron/cli.py`](../ultron/cli.py)). Prints the whitelisted Discord user id on success; exit code `1` on unknown/expired token or state-file errors.
+
+State lives under **`ULTRON_STATE_DIR`**: `whitelist.json`, `admins.json`, and pending-token files. Pending codes expire after **`TOKEN_TTL_SECONDS`** (300s / 5 minutes in [`ultron/state_store.py`](../ultron/state_store.py)). Do not commit tokens or paste them into tickets/chat logs.
+
 ### Logs and scheduled posts
 
 - **`discord.registration_log`** in `config.yaml` — Optional Discord channel on startup (when `features.startup`): LLM-disabled notice if applicable, and a short **online** line **only** when **`reports.startup_message_enabled`** is false or **`reports.channel_id`** is `0` (so the same sentence is not posted twice when the reports channel already sends its welcome). Whitelist events use `features.whitelist_events`. This is **not** the Redmine digest channel unless you deliberately use the same id.
