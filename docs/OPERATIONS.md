@@ -28,6 +28,7 @@ Implemented in [`ultron/settings.py`](../ultron/settings.py):
 
 - **Config first:** `load_env()` loads `config.yaml` (see **`CONFIG_PATH`** below), then reads the process environment using **names** from optional top-level **`environment_bindings`** (defaults match `.env.example`). Only **`CONFIG_PATH`** is read before YAML.
 - **Always required (by default via those names):** `DISCORD_TOKEN`, `REDMINE_URL`, `REDMINE_API_KEY`.
+- **Optional Redmine time activity:** `REDMINE_TIME_ACTIVITY_ID` — see **[Redmine](#redmine)** (time reporting) and [`.env.example`](../.env.example).
 - **LLM optional:** If there is no usable `llm_chain` in `config.yaml` (empty, omitted, or all entries disabled), `llm_enabled` is **false** — the bot still starts; `/summary`, `/ask_issue`, and `/note` are rejected with a clear message.
 - **Conflict:** `LLM_DISABLED` / `ULTRON_NO_LLM` (or the names set in `environment_bindings`) cannot be set together with a non-empty `llm_chain` (startup error).
 
@@ -66,6 +67,10 @@ Memory is loaded once per call via `_user_memory_block` / `format_for_prompt` an
 - **Project defaults** (under **`redmine:`** in `config.yaml`; see [`config.example.yaml`](../config.example.yaml) and the wizard):
   - **`find_issue_project`** — Default project for **`/find_issue`**. Prefer a Redmine **identifier**, or a value that resolves via `list_projects` (display **name**, numeric **id**, or **prefix**). Empty/null → **10_AMVARA**. Using a display name as a raw URL path segment can 404; Ultron resolves name/prefix to the identifier before calling search.
   - **`new_ticket_default_project`** — Used when **`/new_ticket`** omits **`project`**. Same resolution rules (identifier, name, or prefix — e.g. **`05_`** → **05_AMVARA_internal**). Empty/null → **`05_`**.
+- **Time reporting** (same **`redmine:`** block / env; Discord errors for **`/time_summary`** and **`/log_time`** name these knobs when lookup or activity pick fails):
+  - **`user_id_by_login`** — Map Redmine **login** → numeric **user id** (keys matched case-insensitively). Use when API login search is forbidden (**403**); operators can still pass a numeric id or **`me`**. Empty map `{}` is fine when listing users works.
+  - **`time_summary_max_entries`** — Pagination cap for spent-hours fetches in **`/time_summary`**. Null/empty → **2000**; values are clamped to **50–5000**.
+  - **`REDMINE_TIME_ACTIVITY_ID`** — Optional env (see [`.env.example`](../.env.example)): numeric time-entry **activity** id for **`/log_time`** when Redmine has several activities or no single default. List ids via Redmine REST **`GET /enumerations/time_entry_activities.json`** (or read the bot’s error text when unset).
 
 ## Discord
 
@@ -203,7 +208,7 @@ Agent logs: **`data/self-upgrade/`** under **`ULTRON_STATE_DIR`**.
 
 - Parsing and defaults: [`ultron/config.py`](../ultron/config.py) (`load_config`). Invalid YAML or invalid `llm_chain` entries raise **`ValueError`** at startup.
 - Reference template: [`config.example.yaml`](../config.example.yaml).
-- Redmine project knobs **`find_issue_project`** / **`new_ticket_default_project`** (defaults and resolve rules) are summarized under **[Redmine](#redmine)** above; full comments live in the example YAML and wizard prompts.
+- Redmine project knobs **`find_issue_project`** / **`new_ticket_default_project`** and time-reporting knobs **`user_id_by_login`** / **`time_summary_max_entries`** / env **`REDMINE_TIME_ACTIVITY_ID`** are summarized under **[Redmine](#redmine)** above; full comments live in the example YAML, [`.env.example`](../.env.example), and wizard prompts.
 
 ## Health checks
 
