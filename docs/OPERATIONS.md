@@ -169,6 +169,8 @@ Configure under **`amvara:`** in `config.yaml` (see **`config.example.yaml`**):
 
 **Ollama busy / slow inference:** under **`pi:`**, **`ollama_busy_check`** (default true) and **`ollama_inference_probe_seconds`** (default 12) probe Ollama before long pi work. When the probe times out or Ollama is down, **`/audit`** and Amvara @mentions skip straight to **cursor-agent** (if **`amvara.audit.fallback_enabled`** and **`cursor_agent.enabled`**).
 
+**Ollama SSH tunnel (optional):** if Ollama is remote and does not respond, Ultron can run an executable tunnel script before the busy probe. Set env **`ULTRON_OLLAMA_TUNNEL_SCRIPT`** or YAML **`pi.tunnel_script`** (env wins when non-empty; see **`.env.example`** / **`config.example.yaml`**).
+
 **LLM chat fallback:** when **`cursor_agent.llm_fallback_enabled`** is true (default), any chat completion that uses **`llm_chain`** — NL @mention routing, **`/summary`**, **`/ask_issue`**, **`/note`**, **`/ol`** — falls back to **cursor-agent** if every chain provider fails (timeout, connection error, HTTP error). Set **`cursor_agent.llm_fallback_timeout_seconds`** (default 240).
 
 **cursor-agent** install: enable **`cursor_agent.enabled`**, put the CLI on PATH (`~/.local/bin/cursor-agent`), or set **`ULTRON_CURSOR_AGENT_BIN`**.
