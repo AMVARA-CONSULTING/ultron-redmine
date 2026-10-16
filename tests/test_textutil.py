@@ -10,6 +10,8 @@ from ultron.textutil import (
     ISSUE_SUMMARY_MAX_TOTAL_CHARS,
     format_issue_for_summary,
     format_issue_metadata_header,
+    format_single_journal_note,
+    select_journal_note,
 )
 from ultron.user_memory import MEMORY_PROMPT_MAX_CHARS
 from ultron.workflows import SUMMARY_SYSTEM, _memory_prefix
@@ -107,7 +109,7 @@ def test_prompt_budget_ballpark_chars() -> None:
 def test_llm_prompts_always_english() -> None:
     """Discord-facing LLM system prompts must force English replies."""
     from ultron.ollama_slash import load_ol_system_prompt
-    from ultron.workflows import ASK_ABOUT_ISSUE_SYSTEM, NOTE_SYSTEM
+    from ultron.workflows import ASK_ABOUT_ISSUE_SYSTEM, NOTE_SYSTEM, SUMMARY_NOTE_SYSTEM
 
     assert "in English" in NL_ROUTER_SYSTEM
     assert "user's language" not in NL_ROUTER_SYSTEM
@@ -118,3 +120,45 @@ def test_llm_prompts_always_english() -> None:
     ol = load_ol_system_prompt()
     assert "Always respond in English" in ol
     assert "unless the user explicitly asks" not in ol
+    assert "Summarize that note only" in SUMMARY_NOTE_SYSTEM
+    assert "Always reply in English" in SUMMARY_NOTE_SYSTEM
+
+
+def _note_issue() -> dict:
+    return {
+        "id": 10,
+        "subject": "Gate deploy",
+        "description": "SECRET-DESC-SHOULD-NOT-APPEAR",
+        "journals": [
+            {"id": 1, "user": {"name": "Ada"}, "created_on": "2026-01-01", "notes": "   "},
+            {"id": 2, "user": {"name": "Ada"}, "created_on": "2026-01-02", "notes": "FIRST-NOTE"},
+            {"id": 3, "user": {"name": "Bea"}, "created_on": "2026-01-03", "notes": ""},
+            {"id": 4, "user": {"name": "Cy"}, "created_on": "2026-01-04", "notes": "LAST-NOTE"},
+        ],
+    }
+
+
+def test_select_journal_note_skips_empty_and_indexes() -> None:
+    issue = _note_issue()
+    assert select_journal_note(issue, "last")["notes"] == "LAST-NOTE"
+    assert select_journal_note(issue, "first")["notes"] == "FIRST-NOTE"
+    assert select_journal_note(issue, "1")["id"] == 2
+    assert select_journal_note(issue, "2")["id"] == 4
+    assert select_journal_note(issue, "3") is None
+    assert select_journal_note(issue, "0") is None
+    assert select_journal_note({"journals": []}, "last") is None
+    assert select_journal_note({"journals": [{"notes": "  "}]}, "first") is None
+
+
+def test_format_single_journal_note_excludes_description_and_other_notes() -> None:
+    issue = _note_issue()
+    journal = select_journal_note(issue, "1")
+    assert journal is not None
+    text = format_single_journal_note(issue, journal)
+    assert "FIRST-NOTE" in text
+    assert "Issue #10: Gate deploy" in text
+    assert "Journal id: 2" in text
+    assert "Ada" in text
+    assert "2026-01-02" in text
+    assert "SECRET-DESC-SHOULD-NOT-APPEAR" not in text
+    assert "LAST-NOTE" not in text

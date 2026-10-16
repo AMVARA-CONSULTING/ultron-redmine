@@ -8,6 +8,45 @@ ISSUE_SUMMARY_MAX_NOTE_CHARS = 800
 ISSUE_SUMMARY_MAX_TOTAL_CHARS = 8000
 
 
+def journals_with_notes(issue: dict) -> list[dict]:
+    """Journals whose ``notes`` are non-empty after strip, in Redmine order."""
+    journals = issue.get("journals") or []
+    return [j for j in journals if str(j.get("notes") or "").strip()]
+
+
+def select_journal_note(issue: dict, selector: str | None) -> dict | None:
+    """Pick one journal with notes.
+
+    ``last`` / ``first`` are the newest / oldest such journal.
+    A positive decimal string is a 1-based index in Redmine order (oldest = 1).
+    Empty notes are skipped. Out of range or an unknown selector returns None.
+    """
+    noted = journals_with_notes(issue)
+    sel = (selector or "last").strip().lower()
+    if sel == "last":
+        return noted[-1] if noted else None
+    if sel == "first":
+        return noted[0] if noted else None
+    if not sel.isdigit():
+        return None
+    idx = int(sel)
+    if idx < 1 or idx > len(noted):
+        return None
+    return noted[idx - 1]
+
+
+def format_single_journal_note(issue: dict, journal: dict) -> str:
+    """One-line context plus that note only (no description, no other journals)."""
+    author = (journal.get("user") or {}).get("name", "")
+    context = (
+        f"Issue #{issue.get('id')}: {issue.get('subject', '')} | "
+        f"Journal id: {journal.get('id', '')} | Author: {author} | "
+        f"Created: {journal.get('created_on', '')}"
+    )
+    notes = str(journal.get("notes") or "").strip()
+    return f"{context}\n\n{notes}"
+
+
 def format_issue_metadata_header(issue: dict) -> str:
     """One-line Discord markdown: note count, logged time, last update (Redmine issue JSON)."""
     journals = issue.get("journals") or []

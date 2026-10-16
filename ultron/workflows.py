@@ -8,7 +8,13 @@ from ultron.llm_cursor_fallback import llm_chain_client
 from ultron.readlog import log_read_payload
 from ultron.redmine import IssueNotFound, RedmineClient
 from ultron.redmine_textile import scrub_markdown_to_textile
-from ultron.textutil import format_issue_for_summary, format_issue_metadata_header
+from ultron.textutil import (
+    format_issue_for_summary,
+    format_issue_metadata_header,
+    format_single_journal_note,
+    journals_with_notes,
+    select_journal_note,
+)
 from ultron.workflow_log import wf_info
 
 SUMMARY_SYSTEM = (
@@ -22,6 +28,13 @@ ASK_ABOUT_ISSUE_SYSTEM = (
     "Use only the ticket text (description, metadata, journal notes). "
     "If information is missing, say so. Be concise. "
     "Always reply in English, regardless of the question or ticket language."
+)
+
+SUMMARY_NOTE_SYSTEM = (
+    "You summarize one Redmine journal note for a technical team. "
+    "Summarize that note only. Do not recap ticket status, do not mention other notes, "
+    "and do not invent next steps. "
+    "Always reply in English, regardless of the note language. Be concise."
 )
 
 NOTE_SYSTEM = (
@@ -39,6 +52,10 @@ NOTE_SYSTEM = (
     "Do NOT use Markdown: no **bold**, no ``` fenced code blocks, no # ATX headings, "
     "no Discord spoilers or mention markup."
 )
+
+class JournalNoteNotFound(Exception):
+    """No journal note matched the selector. ``args[0]`` is a short English error."""
+
 
 logger = logging.getLogger(__name__)
 
@@ -126,6 +143,95 @@ async def summarize_issue(
         _WF_LLM_DONE,
         "issue_id=%s response_chars=%s",
         issue_id,
+        len(out),
+    )
+    if meta:
+        return f"{meta}\n\n{out.strip()}"
+    return out
+
+
+async def summarize_journal_note(
+    *,
+    redmine: RedmineClient,
+    llm: LLMBackend,
+    issue_id: int,
+    selector: str = "last",
+    log_read_messages: bool = False,
+    on_before_llm: Callable[[str], Awaitable[None]] | None = None,
+    on_llm_chain_skip: ChainSkipCallback | None = None,
+    issue_metadata_header: bool = True,
+    start_provider: str | None = None,
+    model_override: str | None = None,
+    llm_display_model: str | None = None,
+    memory_block: str | None = None,
+) -> str:
+    """Summarize one journal note. Does not fall back to a whole-ticket summary."""
+    issue = await redmine.get_issue(issue_id)
+    noted = journals_with_notes(issue)
+    journal = select_journal_note(issue, selector)
+    if journal is None:
+        raise JournalNoteNotFound(
+            f"Issue #{issue_id} has {len(noted)} notes with text; "
+            f"cannot summarize selector {selector!r}."
+        )
+    meta = format_issue_metadata_header(issue) if issue_metadata_header else ""
+    note_block = format_single_journal_note(issue, journal)
+    user_prompt = (
+        f"{_memory_prefix(memory_block)}"
+        f"Summarize this single journal note only.\n\n{note_block}"
+    )
+    if log_read_messages:
+        log_read_payload(
+            label=f"summary_note.issue_id={issue_id}.formatted_body",
+            text=note_block,
+        )
+        log_read_payload(
+            label=f"summary_note.issue_id={issue_id}.llm_system",
+            text=SUMMARY_NOTE_SYSTEM,
+        )
+        log_read_payload(label=f"summary_note.issue_id={issue_id}.llm_user", text=user_prompt)
+    wf_info(
+        logger,
+        "summarize_journal_note",
+        _WF_FETCH,
+        "issue_id=%s selector=%s prompt_chars=%s",
+        issue_id,
+        selector,
+        len(user_prompt),
+    )
+    wf_info(
+        logger,
+        "summarize_journal_note",
+        _WF_LLM_CALL,
+        "issue_id=%s selector=%s",
+        issue_id,
+        selector,
+    )
+    if isinstance(llm_display_model, str) and llm_display_model.strip():
+        display = llm_display_model.strip()
+    else:
+        chain = llm_chain_client(llm)
+        display = chain.display_model_for_start(start_provider) if chain is not None else llm.model
+    if on_before_llm is not None:
+        await on_before_llm(display)
+    kw = _llm_complete_kwargs(start_provider=start_provider, model_override=model_override)
+    chain = llm_chain_client(llm)
+    if chain is not None and on_llm_chain_skip is not None:
+        out = await llm.complete(
+            system=SUMMARY_NOTE_SYSTEM,
+            user=user_prompt,
+            on_chain_skip=on_llm_chain_skip,
+            **kw,
+        )
+    else:
+        out = await llm.complete(system=SUMMARY_NOTE_SYSTEM, user=user_prompt, **kw)
+    wf_info(
+        logger,
+        "summarize_journal_note",
+        _WF_LLM_DONE,
+        "issue_id=%s selector=%s response_chars=%s",
+        issue_id,
+        selector,
         len(out),
     )
     if meta:

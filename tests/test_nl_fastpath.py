@@ -147,3 +147,45 @@ def test_reply_context_separator_keeps_user_half() -> None:
 
 def test_non_match_falls_through() -> None:
     assert try_nl_fastpath("please invent a poem about servers") is None
+
+
+def test_summary_note_fastpath_phrases() -> None:
+    cases = (
+        ("resume la nota del ticket 123", 123, "last"),
+        ("resumir la última nota de #8066", 8066, "last"),
+        ("summarize the last note of issue 42", 42, "last"),
+        ("resume la nota 3 del ticket 10", 10, "3"),
+        ("summarize the first note of ticket 5", 5, "first"),
+        ("summarize note #3 of ticket 9", 9, "3"),
+        ("resume la 3ª nota del ticket 8", 8, "3"),
+        ("resumir la nota número 2 del ticket 4", 4, "2"),
+    )
+    for text, issue_id, selector in cases:
+        out = try_nl_fastpath(text)
+        assert isinstance(out, NLInvoke), text
+        assert out.command == "summary_note", text
+        assert out.args["issue_id"] == issue_id, text
+        assert out.args["selector"] == selector, text
+
+
+def test_whole_ticket_summary_phrases_stay_summary() -> None:
+    for text, issue_id in (
+        ("summarize #123", 123),
+        ("resume el ticket 123", 123),
+        ("resumen del ticket 123", 123),
+        ("summarize ticket 42", 42),
+    ):
+        out = try_nl_fastpath(text)
+        assert isinstance(out, NLInvoke), text
+        assert out.command == "summary", text
+        assert out.args["issue_id"] == issue_id
+
+
+def test_summarize_note_without_issue_marker_falls_through() -> None:
+    """``summarize note 123`` has no ticket/issue/# — not an issue id."""
+    assert try_nl_fastpath("summarize note 123") is None
+
+
+def test_summary_note_negation_falls_through() -> None:
+    assert try_nl_fastpath("no resumir la nota del ticket 123") is None
+    assert try_nl_fastpath("don't summarize the last note of issue 42") is None

@@ -30,9 +30,10 @@ Each step is one of:
 {"kind":"invoke","command":"<name>","args":{...}}
 
 Allowed invoke commands and args:
-- summary — {"issue_id": <positive int>}
+- summary — {"issue_id": <positive int>} (whole ticket)
+- summary_note — {"issue_id": <positive int>, "selector": "<last|first|positive note index, optional default last>"} (one existing journal note)
 - ask_issue — {"issue_id": <int>, "question": "<non-empty string>"}
-- note — {"issue_id": <int>, "text": "<non-empty note body>"}
+- note — {"issue_id": <int>, "text": "<non-empty note body>"} (add a note; never read or summarize one)
 - log_time — {"issue_id": <int>, "hours": <positive number>}
 - time_summary — {"user": "<Redmine login, numeric user id, or me>"}
 - ol — {"text": "<non-empty string>"}
@@ -43,6 +44,7 @@ Allowed invoke commands and args:
 
 Rules:
 - Order steps logically (e.g. audit first, then note with findings).
+- Whole ticket / issue / descripción → summary with issue_id only. One existing note / journal / comentario → summary_note. Adding text onto a ticket → note (write). Never use note to read or summarize a note.
 - For note after an audit, write the note text as a summary of expected audit findings (the executor passes prior output).
 - Use only hosts from the allowed list provided in the user message.
 - NEVER use pi, ca, audit, approve, remove, show_config, or token as invoke commands.

@@ -106,6 +106,26 @@ _SUMMARY_VERB_RE = re.compile(
     re.IGNORECASE,
 )
 
+_NOTE_WORD_RE = re.compile(
+    r"\b(?:notas?|notes?|journal|comentarios?)\b",
+    re.IGNORECASE,
+)
+# "nota 3", "note #3", "nota número 3"
+_NOTE_INDEX_AFTER_RE = re.compile(
+    r"\b(?:notas?|notes?|journal|comentarios?)\s+(?:n[uú]mero\s+|number\s+)?#?\s*(\d{1,4})\b",
+    re.IGNORECASE,
+)
+# "3ª nota", "3a nota"
+_NOTE_INDEX_BEFORE_RE = re.compile(
+    r"\b(\d{1,4})\s*(?:ª|º|a|st|nd|rd|th)?\s+(?:notas?|notes?|journal|comentarios?)\b",
+    re.IGNORECASE,
+)
+_NOTE_FIRST_RE = re.compile(r"\b(?:primera|first)\b", re.IGNORECASE)
+_NOTE_LAST_RE = re.compile(
+    r"\b(?:[uú]ltima|last|latest|reciente)\b",
+    re.IGNORECASE,
+)
+
 
 @dataclass(frozen=True)
 class NLMemoryUpdate:
@@ -138,6 +158,29 @@ def _slug_key_from_text(text: str) -> str:
         return "note"
     base = "_".join(w.lower() for w in words[:4])
     return base[:64] or "note"
+
+
+def _note_selector_from_text(ut: str) -> str:
+    """Map note-scoped wording to last / first / a 1-based index."""
+    m = _NOTE_INDEX_AFTER_RE.search(ut) or _NOTE_INDEX_BEFORE_RE.search(ut)
+    if m:
+        return str(int(m.group(1)))
+    if _NOTE_FIRST_RE.search(ut):
+        return "first"
+    return "last"
+
+
+def _issue_ids_for_note_summary(ut: str) -> tuple[int, ...]:
+    """Issue ids, ignoring a ``note #N`` hash that is the note index.
+
+    ``extract_issue_ids`` treats every ``#N`` as an issue. ``note #3`` is an
+    index, so that span is removed before the lookup. ``summarize note #3``
+    with no ticket/issue marker then has no issue id and stays on the LLM path.
+    """
+    m = _NOTE_INDEX_AFTER_RE.search(ut)
+    if m and "#" in m.group(0):
+        ut = ut[: m.start()] + ut[m.end() :]
+    return extract_issue_ids(ut)
 
 
 def _strip_reply_context(user_text: str) -> str:
@@ -203,6 +246,20 @@ def try_nl_fastpath(user_text: str) -> NLFastpathOutcome | None:
     if m:
         return NLInvoke(command="summary", args={"issue_id": int(m.group(1))})
 
+    # One journal note (before the whole-ticket summary fallback).
+    # "summarize note 123" has no ticket/issue/# id — leave that to the LLM router.
+    ids = _issue_ids_for_note_summary(ut)
+    if (
+        len(ids) == 1
+        and _SUMMARY_VERB_RE.search(ut)
+        and _NOTE_WORD_RE.search(ut)
+        and not _SUMMARY_NEGATION_RE.search(ut)
+    ):
+        return NLInvoke(
+            command="summary_note",
+            args={"issue_id": ids[0], "selector": _note_selector_from_text(ut)},
+        )
+
     # Single issue id + clear summary verb (short messages only).
     # Skip when negation is present — prefer LLM over a wrong summary invoke.
     ids = extract_issue_ids(ut)
@@ -210,6 +267,7 @@ def try_nl_fastpath(user_text: str) -> NLFastpathOutcome | None:
         len(ids) == 1
         and len(ut) <= 80
         and _SUMMARY_VERB_RE.search(ut)
+        and not _NOTE_WORD_RE.search(ut)
         and not _SUMMARY_NEGATION_RE.search(ut)
     ):
         return NLInvoke(command="summary", args={"issue_id": ids[0]})

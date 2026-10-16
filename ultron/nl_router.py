@@ -23,6 +23,7 @@ NL_ALLOWED_COMMANDS: frozenset[str] = frozenset(
         "find_issue",
         "top_tickets",
         "summary",
+        "summary_note",
         "ask_issue",
         "note",
         "log_time",
@@ -76,18 +77,20 @@ Allowed command names and args (only these):
 - list_unassigned_issues — args {}
 - find_issue — args {"text":"<non-empty search hint>"} (Redmine full-text search in the default project)
 - top_tickets — args {"project":"<project identifier or name>", "kind_filter":"<priority|newests|oldests, optional default priority>", "limit":<positive int, optional default 10>}
-- summary — args {"issue_id": <positive integer>}
+- summary — args {"issue_id": <positive integer>} (whole ticket)
+- summary_note — args {"issue_id": <positive integer>, "selector": "<last|first|positive note index, optional default last>"} (one existing journal note only)
 - ask_issue — args {"issue_id": <int>, "question": "<non-empty string>"}
-- note — args {"issue_id": <int>, "text": "<non-empty note body>"}
+- note — args {"issue_id": <int>, "text": "<non-empty note body>"} (add a note; never read or summarize one)
 - log_time — args {"issue_id": <positive integer>, "hours": <positive number>}
 - time_summary — args {"user": "<Redmine login, numeric user id, or me>"}
 - ol — args {"text": "<non-empty question or task for the local advisor>"}
 - new_ticket — args {"title":"<non-empty subject>", "description":"<non-empty description>", "project":"<optional project identifier or name; omit for default 05_ prefix>"}
 
 Rules:
-- If the user wants a ticket summary, use summary with issue_id.
+- Whole ticket / issue / descripción → summary with issue_id only.
+- One existing note / journal / comentario → summary_note. selector is last (default), first, or a 1-based index among notes that have text.
+- Adding text onto a ticket → note (write). Never use note to read or summarize a note.
 - If they ask a question about a ticket, use ask_issue.
-- If they want to add a note to a ticket, use note.
 - If they want to log spent time / hours on a ticket, use log_time with hours (not minutes unless they specify hours as a decimal).
 - If they ask how much time someone logged / spent hours for a user (today, this week, etc.), use time_summary with user (login, id, or me).
 - If they want general technical advice, Linux/Redmine/Ultron help, or a conceptual question (not tied to a ticket), use ol with text.
@@ -194,6 +197,30 @@ def _as_int(v: Any, field: str) -> int:
     raise ValueError(f"{field} must be a positive integer")
 
 
+def _as_note_selector(v: Any) -> str:
+    """``last``, ``first``, or a positive 1-based note index. Default is ``last``."""
+    if v is None or (isinstance(v, str) and not v.strip()):
+        return "last"
+    if isinstance(v, bool):
+        raise ValueError("selector must be last, first, or a positive note index")
+    if isinstance(v, int):
+        if v <= 0:
+            raise ValueError("selector must be last, first, or a positive note index")
+        return str(v)
+    if isinstance(v, float):
+        i = int(v)
+        if i != v or i <= 0:
+            raise ValueError("selector must be last, first, or a positive note index")
+        return str(i)
+    if isinstance(v, str):
+        s = v.strip().lower()
+        if s in ("last", "first"):
+            return s
+        if s.isdigit() and int(s) > 0:
+            return str(int(s))
+    raise ValueError("selector must be last, first, or a positive note index")
+
+
 def _as_nonempty_str(v: Any, field: str) -> str:
     if not isinstance(v, str) or not v.strip():
         raise ValueError(f"{field} must be a non-empty string")
@@ -213,6 +240,9 @@ def _validate_args(command: str, args: Any) -> dict[str, Any]:
     if command == "summary":
         iid = _as_int(args.get("issue_id"), "issue_id")
         return {"issue_id": iid}
+    if command == "summary_note":
+        iid = _as_int(args.get("issue_id"), "issue_id")
+        return {"issue_id": iid, "selector": _as_note_selector(args.get("selector", "last"))}
     if command == "ask_issue":
         iid = _as_int(args.get("issue_id"), "issue_id")
         q = _as_nonempty_str(args.get("question"), "question")

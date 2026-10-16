@@ -126,7 +126,13 @@ from ultron.state_store import (
     remove_user_from_whitelist,
 )
 from ultron.textutil import chunk_discord
-from ultron.workflows import add_formatted_note, ask_about_issue, summarize_issue
+from ultron.workflows import (
+    JournalNoteNotFound,
+    add_formatted_note,
+    ask_about_issue,
+    summarize_issue,
+    summarize_journal_note,
+)
 from ultron.user_memory import MemoryError, UserMemoryStore
 from ultron.nl_fastpath import (
     NLMemoryClear,
@@ -393,6 +399,7 @@ _HELP_TEXT = (
 • `/time_summary` `user` — Redmine **spent hours** for a user: **today**, **this week** (Mon–today), **last 7 days** (by **spent_on**), and **last 24 h** (by **created_on**). `user` = Redmine login, numeric id, or **`me`**. If login lookup fails (permissions), set **redmine.user_id_by_login** in `config.yaml`.
 • `/log_time` `issue_id` `hours` [`comments`] [`spent_on`] — Log spent hours (booked as the **Redmine API key** user). Optional **comments** and **spent_on** (YYYY-MM-DD). **Confirm** before write. See **REDMINE_TIME_ACTIVITY_ID** in `.env` when Redmine has several activities.
 • `/summary` `issue_id` [`llm_provider`] [`llm_model`] — Ticket summary (requires LLM). Optional provider/model: autocomplete when configured; omit for defaults.
+• **@mention summary_note** — Summarize one journal note (`last`, `first`, or a note number), not the whole ticket. Adding a note stays `/note`.
 • `/ask_issue` `issue_id` `question` [`llm_provider`] [`llm_model`] — Answer from the ticket text (requires LLM).
 • `/note` `issue_id` `text` [`llm_provider`] [`llm_model`] — Append an LLM-polished note (requires LLM). Posts immediately (no Confirm).
 • `/ol` `text` [`llm_provider`] [`llm_model`] — Ask the configured local model (Ollama when present in **llm_chain**) for technical or general advice. Advisory only — no shell or file access.
@@ -497,6 +504,11 @@ def _nl_dispatch_status_line(command: str, args: dict[str, Any]) -> str:
         )
     if command == "summary":
         return f"Summarizing issue **#{int(args['issue_id'])}**…"
+    if command == "summary_note":
+        sel = str(args.get("selector", "last")).strip() or "last"
+        return (
+            f"Summarizing note **{escape_markdown(sel)}** of issue **#{int(args['issue_id'])}**…"
+        )
     if command == "ask_issue":
         return f"Answering about issue **#{int(args['issue_id'])}**…"
     if command == "note":
@@ -2837,6 +2849,28 @@ class UltronBot(commands.Bot):
                 )
                 await _reply_chunked_to_message(message, text, edit_first=status_message)
                 return
+            if cmd == "summary_note":
+                issue_id = int(args["issue_id"])
+                selector = str(args.get("selector", "last"))
+                on_skip = _llm_chain_skip_nl_discord_cb(
+                    message=message,
+                    status_message=status_message,
+                    template=self.app_cfg.discord.llm_chain_skip_status,
+                    feature="nl_summary_note",
+                )
+                text = await summarize_journal_note(
+                    redmine=self.redmine,
+                    llm=self.llm,
+                    issue_id=issue_id,
+                    selector=selector,
+                    log_read_messages=self.app_cfg.logging.log_read_messages,
+                    on_before_llm=None,
+                    on_llm_chain_skip=on_skip,
+                    issue_metadata_header=self.app_cfg.discord.issue_metadata_header,
+                    memory_block=self._user_memory_block(message.author.id) or None,
+                )
+                await _reply_chunked_to_message(message, text, edit_first=status_message)
+                return
             if cmd == "ask_issue":
                 issue_id = int(args["issue_id"])
                 question = str(args["question"])
@@ -2910,6 +2944,9 @@ class UltronBot(commands.Bot):
                 reply = format_ol_reply(display_model=display_model, body=body)
                 await _reply_chunked_to_message(message, reply, edit_first=status_message)
                 return
+        except JournalNoteNotFound as e:
+            await _err(str(e))
+            return
         except IssueNotFound:
             await _err("Issue not found in Redmine.")
             return

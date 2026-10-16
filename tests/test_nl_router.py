@@ -88,6 +88,20 @@ def test_parse_router_time_summary_rejects_missing_user() -> None:
     assert isinstance(out, NLParseError)
 
 
+def test_parse_router_summary_note_last() -> None:
+    raw = '{"kind":"invoke","command":"summary_note","args":{"issue_id":42,"selector":"last"}}'
+    out = parse_router_json_text(raw)
+    assert isinstance(out, NLInvoke)
+    assert out.command == "summary_note"
+    assert out.args == {"issue_id": 42, "selector": "last"}
+
+
+def test_parse_router_summary_note_rejects_bogus_selector() -> None:
+    raw = '{"kind":"invoke","command":"summary_note","args":{"issue_id":42,"selector":"bogus"}}'
+    out = parse_router_json_text(raw)
+    assert isinstance(out, NLParseError)
+
+
 def test_parse_router_invoke_ol() -> None:
     raw = '{"kind":"invoke","command":"ol","args":{"text":"How do I restart Ultron under systemd?"}}'
     out = parse_router_json_text(raw)
