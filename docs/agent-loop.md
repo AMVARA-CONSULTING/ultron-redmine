@@ -80,6 +80,7 @@ Environment highlights:
 | `AGENT_GH_REPO` | `AMVARA-CONSULTING/ultron-redmine` | GitHub repo for optional GH intake |
 | `ULTRON_LOG_FILE` | `./ultron.log` | Log path for 001 heuristics |
 | `AGENT_INTAKE_REVIEWER_ALWAYS` | 0 | Force 001 cursor-agent every cycle |
+| `AGENT_ENHANCEMENT_REVIEWER` | 1 | Set `0` to disable 008 weekly auto-improve (host: `autoagents/loop.local.env`) |
 | `AGENT_ULTRON_DUMP` | 1 | After committer, run `ultron-dump.sh` when runtime paths changed |
 
 ### When `cursor-agent` runs

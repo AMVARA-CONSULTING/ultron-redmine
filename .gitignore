@@ -9,6 +9,8 @@ data/
 ultron.log
 autoagents/logs/
 autoagents/.last-ultron-dump-sha
+autoagents/loop.local.env
+autoagents/.runtime-loop.pid
 node_modules/
 .pi/
 venv/

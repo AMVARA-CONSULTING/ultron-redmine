@@ -102,7 +102,8 @@ discord:
     list_limit: null
 
     # closed_status_prefixes — Exclude issues whose current status name equals or starts with any of these (case-insensitive).
-    # Example: ["Solved", "Closed", "Rejected"]
+    # Prefer exact Redmine status names from GET /issue_statuses.json (do not invent labels).
+    # Example on redmine.amvara.de: ["Solved", "Closed", "Rejected", "Sleep/Schläft", "Comments/Kommentiert"]
     closed_status_prefixes: []
 
 reports:

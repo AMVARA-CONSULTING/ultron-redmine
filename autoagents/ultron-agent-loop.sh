@@ -23,6 +23,16 @@ LAST_REVIEW_FILE="${SCRIPTDIR}/001-redmine-reviewer/time-of-last-review.txt"
 ENH_REVIEW_FILE="${SCRIPTDIR}/008-enhancement-reviewer/time-of-last-review.txt"
 INTAKE_PREFLIGHT="${REPO_ROOT}/scripts/redmine-reviewer-preflight.sh"
 ENH_PREFLIGHT="${REPO_ROOT}/scripts/enhancement-reviewer-preflight.sh"
+
+# Host-local overrides (gitignored). AGENT_ENHANCEMENT_REVIEWER=0 disables weekly auto-improve (008).
+LOCAL_ENV="${SCRIPTDIR}/loop.local.env"
+if [[ -f "$LOCAL_ENV" ]]; then
+  set -a
+  # shellcheck disable=SC1090
+  . "$LOCAL_ENV"
+  set +a
+fi
+
 # Local stamp (gitignored): last HEAD applied via scripts/ultron-dump.sh from this loop.
 LAST_DUMP_SHA_FILE="${SCRIPTDIR}/.last-ultron-dump-sha"
 ULTRON_DUMP_SCRIPT="${REPO_ROOT}/scripts/ultron-dump.sh"
@@ -284,6 +294,10 @@ Then follow 001-redmine-reviewer.md — Redmine/GH → up to 3 × FEAT-*.md; log
 
 step_enhancement_reviewer() {
   echo "-----> enhancement reviewer (008) <----"
+  if [[ "${AGENT_ENHANCEMENT_REVIEWER:-1}" == "0" ]]; then
+    echo "----- enhancement (008) (skip: AGENT_ENHANCEMENT_REVIEWER=0 — weekly auto-improve disabled)"
+    return 0
+  fi
   local ctx="${AGENT_LOOP_TMP}/008-latest-context.txt"
   prepare_008_preflight_context "$ctx"
   echo "----- 008 preflight digest: $ctx"
@@ -484,6 +498,7 @@ Usage: $(basename "$0") [COMMAND]
 
 Environment: AGENT_LOOP_SLEEP_MINUTES, AGENT_GIT_SYNC, AGENT_GH_REPO (default AMVARA-CONSULTING/ultron-redmine),
   AGENT_ULTRON_DUMP (default 1; set 0 to skip dump/restart), AGENT_INTAKE_REVIEWER_ALWAYS,
+  AGENT_ENHANCEMENT_REVIEWER (default 1; set 0 to disable 008 weekly auto-improve),
   AGENT_ENHANCEMENT_REVIEWER_ALWAYS, AGENT_CURSOR_TIMEOUT_MINUTES, …
 
 See docs/agent-loop.md and autoagents/TASKS-README.md.
